@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 // ── Generic Master List + Form ─────────────────────────────────────────────────
 class _MasterListScreen extends StatefulWidget {
   final String title;
+  final String subtitle;
   final String endpoint;
   final Widget Function(Map item, VoidCallback onEdit, VoidCallback onDelete) cardBuilder;
   final Widget Function(Map? item, VoidCallback onSaved) formBuilder;
@@ -12,6 +14,7 @@ class _MasterListScreen extends StatefulWidget {
   const _MasterListScreen({
     super.key,
     required this.title,
+    required this.subtitle,
     required this.endpoint,
     required this.cardBuilder,
     required this.formBuilder,
@@ -59,9 +62,9 @@ class _MasterListScreenState extends State<_MasterListScreen> {
       (i['name'] ?? '').toLowerCase().contains(_search.toLowerCase())).toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)]),
       floatingActionButton: FloatingActionButton(onPressed: () => _openForm(), child: const Icon(Icons.add)),
       body: Column(children: [
+        ScreenHeader(title: widget.title, subtitle: widget.subtitle, onRefresh: _load),
         Padding(
           padding: const EdgeInsets.all(12),
           child: TextField(
@@ -175,6 +178,7 @@ class CategoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _MasterListScreen(
     title: 'Categories',
+    subtitle: 'Organize and manage material categories',
     endpoint: '/categories',
     cardBuilder: (item, onEdit, onDelete) => _simpleCard(item, onEdit, onDelete, Icons.category, Colors.purple),
     formBuilder: (item, onSaved) => _SimpleForm(label: 'Category', endpoint: '/categories', item: item, onSaved: onSaved),
@@ -189,6 +193,7 @@ class MaterialScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _MasterListScreen(
     title: 'Materials',
+    subtitle: 'Configure material master data and specifications',
     endpoint: '/materials',
     cardBuilder: (item, onEdit, onDelete) {
       return Card(
@@ -327,9 +332,14 @@ class _UserScreenState extends State<UserScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Users'), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)]),
       floatingActionButton: FloatingActionButton(onPressed: () => _openForm(), child: const Icon(Icons.person_add)),
-      body: _loading
+      body: Column(children: [
+        ScreenHeader(
+          title: 'Users',
+          subtitle: 'Manage system users and access permissions',
+          onRefresh: _load,
+        ),
+        Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _users.isEmpty
               ? const EmptyState(message: 'No users', icon: Icons.people)
@@ -355,6 +365,8 @@ class _UserScreenState extends State<UserScreen> {
                     );
                   },
                 ),
+        ),
+      ]),
     );
   }
 }

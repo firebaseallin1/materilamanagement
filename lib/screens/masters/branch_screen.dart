@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 class BranchScreen extends StatefulWidget {
   const BranchScreen({super.key});
@@ -14,7 +15,23 @@ class _BranchScreenState extends State<BranchScreen> {
   List _locations = [];
   bool _loading = true;
   String _search = '';
+  int _tabIndex = 0; // 0=All 1=Active 2=Inactive
   final _searchCtrl = TextEditingController();
+
+  static const _primary = Color(0xFF111827);
+  static const _green = Color(0xFF16A34A);
+
+  List get _filtered {
+    return _branches.where((b) {
+      final matchSearch = _search.isEmpty ||
+          (b['name'] ?? '').toLowerCase().contains(_search.toLowerCase());
+      final isActive = (b['active'] ?? true) as bool;
+      final matchTab = _tabIndex == 0 ||
+          (_tabIndex == 1 && isActive) ||
+          (_tabIndex == 2 && !isActive);
+      return matchSearch && matchTab;
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -37,346 +54,485 @@ class _BranchScreenState extends State<BranchScreen> {
     }
   }
 
-  // --- UPDATED DIALOG (MATCHES LOCATION SCREEN) ---
   void _openForm([Map? branch]) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // Desktop: 35% width, Mobile: 85% width
-    final panelWidth =
-        screenWidth > 900 ? screenWidth * 0.35 : screenWidth * 0.85;
-
+    final sw = MediaQuery.of(context).size.width;
+    final panelWidth = sw > 900 ? sw * 0.35 : sw * 0.85;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Dismiss',
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, animation1, animation2) {
-        return Align(
-          alignment: Alignment.centerRight,
-          child: Material(
-            elevation: 16,
-            // Only round the left side to look like a sliding drawer
-            borderRadius:
-                const BorderRadius.horizontal(left: Radius.circular(20)),
-            child: SizedBox(
-              width: panelWidth,
-              height: MediaQuery.of(context).size.height, // Full Height
-              child: BranchFormPanel(
-                  branch: branch, locations: _locations, onSaved: _load),
-            ),
+      pageBuilder: (ctx, a1, a2) => Align(
+        alignment: Alignment.centerRight,
+        child: Material(
+          elevation: 16,
+          borderRadius:
+              const BorderRadius.horizontal(left: Radius.circular(20)),
+          child: SizedBox(
+            width: panelWidth,
+            height: MediaQuery.of(ctx).size.height,
+            child: BranchFormPanel(
+                branch: branch, locations: _locations, onSaved: _load),
           ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return SlideTransition(
-          position:
-              Tween<Offset>(begin: const Offset(1, 0), end: const Offset(0, 0))
-                  .animate(animation),
-          child: child,
-        );
-      },
+        ),
+      ),
+      transitionBuilder: (_, a, __, child) => SlideTransition(
+        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+            .animate(a),
+        child: child,
+      ),
     );
   }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
       body: LayoutBuilder(builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 700;
-        final filtered = _branches
-            .where((b) =>
-                _search.isEmpty ||
-                (b['name'] ?? '').toLowerCase().contains(_search.toLowerCase()))
-            .toList();
-
-        return Padding(
-          padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Responsive Header
-              isMobile ? _buildMobileHeader() : _buildDesktopHeader(),
-
-              const SizedBox(height: 20),
-
-              // Stats Strip
-              Row(
-                children: [
-                  const Icon(Icons.store_rounded,
-                      size: 16, color: Color(0xFF2E7D52)),
-                  const SizedBox(width: 6),
-                  Text('${_branches.length} Branches',
-                      style: const TextStyle(
-                          color: Color(0xFF2E7D52),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Data List Container
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4))
-                    ],
-                  ),
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : Column(
-                          children: [
-                            if (!isMobile) _buildTableHeader(),
-                            if (!isMobile) const Divider(height: 1),
-                            Expanded(
-                              child: ListView.separated(
-                                itemCount: filtered.length,
-                                separatorBuilder: (context, index) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, index) => isMobile
-                                    ? _buildMobileRow(filtered[index], index)
-                                    : _buildDesktopRow(filtered[index], index),
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-            ],
-          ),
+        final rows = _filtered;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ScreenHeader(
+              title: 'Branches',
+              subtitle: 'Manage company branches and regional offices',
+              onRefresh: _load,
+            ),
+            if (!isMobile) _buildTabBar(),
+            _buildToolbar(isMobile),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: _green))
+                  : rows.isEmpty
+                      ? _buildEmpty()
+                      : isMobile
+                          ? _buildMobileList(rows)
+                          : _buildTable(rows),
+            ),
+          ],
         );
       }),
     );
   }
 
-  // --- HEADER VARIANTS ---
+  // ── Title bar ────────────────────────────────────────────────────────────────
 
-  Widget _buildDesktopHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Branches',
-                style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E))),
-            Text('Manage your business branch offices',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
-          ],
+  Widget _addBtn(bool compact) => ElevatedButton(
+        onPressed: () => _openForm(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          minimumSize: const Size(0, 34),
+          padding:
+              EdgeInsets.symmetric(horizontal: compact ? 10 : 14, vertical: 0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        Row(
-          children: [
-            _buildSearchBox(width: 260),
-            const SizedBox(width: 12),
-            _buildAddButton(),
-          ],
-        )
-      ],
-    );
-  }
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.add_rounded, size: 16),
+          if (!compact) const SizedBox(width: 4),
+          if (!compact)
+            const Text('Add Branch',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        ]),
+      );
 
-  Widget _buildMobileHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Branches',
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E))),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _buildSearchBox(width: double.infinity)),
-            const SizedBox(width: 8),
-            _buildAddButton(isCompact: true),
-          ],
-        )
-      ],
-    );
-  }
+  // ── Tab bar ──────────────────────────────────────────────────────────────────
 
-  // --- TABLE COMPONENTS ---
-
-  Widget _buildTableHeader() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text('Branch Name', style: _kColHeader)),
-          Expanded(flex: 2, child: Text('Location', style: _kColHeader)),
-          Expanded(flex: 2, child: Text('Contact', style: _kColHeader)),
-          SizedBox(width: 50),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopRow(Map branch, int index) {
-    return InkWell(
-      onTap: () => _openForm(branch),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(flex: 3, child: _buildAvatarName(branch, index)),
-            Expanded(
-                flex: 2,
-                child: _buildSimpleBadge(branch['location']?['name'] ?? '—')),
-            Expanded(
-                flex: 2,
-                child: Text(branch['contactPerson'] ?? '—',
-                    style:
-                        TextStyle(color: Colors.grey.shade600, fontSize: 13))),
-            _buildActionMenu(branch),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileRow(Map branch, int index) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: _buildAvatarName(branch, index, onlyAvatar: true),
-      title: Text(branch['name'] ?? '',
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-      subtitle: Text("${branch['location']?['name'] ?? 'No Location'}",
-          style: const TextStyle(fontSize: 12)),
-      trailing: _buildActionMenu(branch),
-      onTap: () => _openForm(branch),
-    );
-  }
-
-  // --- REUSABLE UI ELEMENTS ---
-
-  Widget _buildAvatarName(Map b, int index, {bool onlyAvatar = false}) {
-    final colors = [
-      const Color(0xFFE3F2FD),
-      const Color(0xFFE8F5E9),
-      const Color(0xFFFFF3E0)
-    ];
-    final textColors = [
-      const Color(0xFF1565C0),
-      const Color(0xFF2E7D52),
-      const Color(0xFFE65100)
-    ];
-    final i = index % colors.length;
-
-    Widget avatar = Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-          color: colors[i], borderRadius: BorderRadius.circular(8)),
-      child: Center(
-          child: Text(b['name']?.substring(0, 1).toUpperCase() ?? '?',
-              style: TextStyle(
-                  color: textColors[i],
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12))),
-    );
-
-    if (onlyAvatar) return avatar;
-    return Row(
-      children: [
-        avatar,
-        const SizedBox(width: 12),
-        Flexible(
-            child: Text(b['name'] ?? '',
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                overflow: TextOverflow.ellipsis)),
-      ],
-    );
-  }
-
-  Widget _buildSimpleBadge(String text) {
-    return UnconstrainedBox(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-            color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
-        child: Text(text,
-            style: TextStyle(
-                color: Colors.blue.shade700,
-                fontSize: 11,
-                fontWeight: FontWeight.w600)),
-      ),
-    );
-  }
-
-  Widget _buildSearchBox({required double width}) {
+  Widget _buildTabBar() {
+    final tabs = ['All Branches', 'Active', 'Inactive'];
     return Container(
-      width: width,
-      height: 40,
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey.shade200)),
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: (v) => setState(() => _search = v),
-        decoration: const InputDecoration(
-          hintText: 'Search...',
-          prefixIcon: Icon(Icons.search, size: 18),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.only(top: 8),
-        ),
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB)))),
+      child: Row(
+        children: List.generate(tabs.length, (i) {
+          final active = _tabIndex == i;
+          return GestureDetector(
+            onTap: () => setState(() => _tabIndex = i),
+            child: Container(
+              margin: const EdgeInsets.only(right: 24),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: active ? _green : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              child: Text(tabs[i],
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                      color: active ? _green : const Color(0xFF6B7280))),
+            ),
+          );
+        }),
       ),
     );
   }
 
-  Widget _buildAddButton({bool isCompact = false}) {
-    return ElevatedButton(
-      onPressed: () => _openForm(),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF1B3A27),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
+  // ── Toolbar ──────────────────────────────────────────────────────────────────
+
+  Widget _buildToolbar(bool isMobile) {
+    return Padding(
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.add, size: 18, color: Colors.white),
-          if (!isCompact) const SizedBox(width: 8),
-          if (!isCompact)
-            const Text('Add Branch', style: TextStyle(color: Colors.white)),
+          // Search
+          Container(
+            width: isMobile ? 140 : 200,
+            height: 34,
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFD1D5DB)),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _search = v),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+              decoration: const InputDecoration(
+                hintText: 'Search...',
+                hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                prefixIcon: Icon(Icons.search_rounded,
+                    size: 16, color: Color(0xFF9CA3AF)),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.only(top: 8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (!isMobile) ...[
+            _toolbarBtn(Icons.swap_vert_rounded, 'Sort'),
+            const SizedBox(width: 8),
+            _toolbarBtn(Icons.tune_rounded, 'Filter'),
+          ],
+          const Spacer(),
+          // Row count chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text('${_filtered.length} rows',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          ),
+          const SizedBox(width: 8),
+          _addBtn(isMobile),
         ],
       ),
     );
   }
 
-  Widget _buildActionMenu(Map branch) {
+  Widget _toolbarBtn(IconData icon, String label) => OutlinedButton.icon(
+        onPressed: () {},
+        icon: Icon(icon, size: 14, color: const Color(0xFF6B7280)),
+        label: Text(label,
+            style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF374151),
+                fontWeight: FontWeight.w400)),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          minimumSize: Size.zero,
+          side: const BorderSide(color: Color(0xFFD1D5DB)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+        ),
+      );
+
+  // ── Desktop table ────────────────────────────────────────────────────────────
+
+  Widget _buildTable(List rows) {
+    return Column(
+      children: [
+        // Header row
+        Container(
+          color: const Color(0xFFF9FAFB),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Row(children: [
+            const SizedBox(width: 28, child: Text('#', style: _kHdr)),
+            const SizedBox(width: 12),
+            const Expanded(flex: 3, child: Text('Branch Name', style: _kHdr)),
+            const Expanded(flex: 2, child: Text('Location', style: _kHdr)),
+            const Expanded(flex: 2, child: Text('Contact', style: _kHdr)),
+            const Expanded(flex: 2, child: Text('Phone', style: _kHdr)),
+            const SizedBox(
+                width: 88,
+                child:
+                    Text('Status', style: _kHdr, textAlign: TextAlign.center)),
+            const SizedBox(width: 40),
+          ]),
+        ),
+        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+        Expanded(
+          child: ListView.builder(
+            itemCount: rows.length,
+            itemBuilder: (_, i) => _buildRow(rows[i], i),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRow(Map b, int index) {
+    final isActive = (b['active'] ?? true) as bool;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openForm(b),
+        hoverColor: const Color(0xFFF9FAFB),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
+          child: Row(children: [
+            SizedBox(
+              width: 28,
+              child: Text('${index + 1}',
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+            ),
+            const SizedBox(width: 12),
+            Expanded(flex: 3, child: _nameCell(b, index)),
+            Expanded(
+              flex: 2,
+              child: Text(b['location']?['name'] ?? '—',
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF374151))),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(b['contactPerson'] ?? '—',
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF374151))),
+            ),
+            Expanded(flex: 2, child: _phoneCell(b['phone'])),
+            SizedBox(width: 88, child: Center(child: _statusBadge(isActive))),
+            _actionMenu(b),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ── Mobile list ──────────────────────────────────────────────────────────────
+
+  Widget _buildMobileList(List rows) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: rows.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) => _mobileCard(rows[i], i),
+    );
+  }
+
+  Widget _mobileCard(Map b, int index) {
+    final isActive = (b['active'] ?? true) as bool;
+    return InkWell(
+      onTap: () => _openForm(b),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(children: [
+          _avatar(b, index, size: 38),
+          const SizedBox(width: 10),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(b['name'] ?? '',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF111827))),
+              const SizedBox(height: 2),
+              Text(
+                  '${b['location']?['name'] ?? '—'}'
+                  '${b['contactPerson'] != null ? ' · ${b['contactPerson']}' : ''}',
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          _statusBadge(isActive),
+          _actionMenu(b),
+        ]),
+      ),
+    );
+  }
+
+  // ── Cells ────────────────────────────────────────────────────────────────────
+
+  Widget _nameCell(Map b, int index) {
+    return Row(children: [
+      _avatar(b, index),
+      const SizedBox(width: 10),
+      Flexible(
+        child: Text(b['name'] ?? '',
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF111827)),
+            overflow: TextOverflow.ellipsis),
+      ),
+    ]);
+  }
+
+  Widget _avatar(Map b, int index, {double size = 28}) {
+    const bgs = [
+      Color(0xFF6366F1),
+      Color(0xFF10B981),
+      Color(0xFFF59E0B),
+      Color(0xFFEF4444),
+      Color(0xFF8B5CF6),
+      Color(0xFF3B82F6),
+    ];
+    final bg = bgs[index % bgs.length];
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(size * 0.28)),
+      child: Center(
+        child: Text(
+          b['name']?.substring(0, 1).toUpperCase() ?? '?',
+          style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: size * 0.42),
+        ),
+      ),
+    );
+  }
+
+  Widget _phoneCell(dynamic phone) {
+    if (phone == null || phone.toString().isEmpty) {
+      return const Text('—',
+          style: TextStyle(fontSize: 13, color: Color(0xFFD1D5DB)));
+    }
+    return Text(phone.toString(),
+        style: const TextStyle(
+            fontSize: 13,
+            color: Color(0xFF2563EB),
+            decoration: TextDecoration.underline),
+        overflow: TextOverflow.ellipsis);
+  }
+
+  Widget _statusBadge(bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        active ? 'Active' : 'Inactive',
+        style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: active ? const Color(0xFF166534) : const Color(0xFF6B7280)),
+      ),
+    );
+  }
+
+  Widget _actionMenu(Map b) {
     return SizedBox(
       width: 40,
       child: PopupMenuButton(
-        icon: const Icon(Icons.more_horiz, color: Colors.grey),
-        itemBuilder: (context) => [
-          const PopupMenuItem(value: 'edit', child: Text('Edit')),
-          const PopupMenuItem(
-              value: 'delete',
-              child: Text('Delete', style: TextStyle(color: Colors.red))),
+        icon: const Icon(Icons.more_horiz_rounded,
+            size: 18, color: Color(0xFF9CA3AF)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 3,
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(children: const [
+              Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
+              SizedBox(width: 8),
+              Text('Edit', style: TextStyle(fontSize: 13)),
+            ]),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(children: const [
+              Icon(Icons.delete_outline_rounded,
+                  size: 15, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text('Delete',
+                  style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+            ]),
+          ),
         ],
         onSelected: (val) {
-          if (val == 'edit') _openForm(branch);
-          // if (val == 'delete') _delete(branch['_id']);
+          if (val == 'edit') _openForm(b);
         },
       ),
     );
   }
+
+  // ── Empty state ──────────────────────────────────────────────────────────────
+
+  Widget _buildEmpty() {
+    final hasSearch = _search.isNotEmpty;
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.store_outlined,
+              size: 28, color: Color(0xFF9CA3AF)),
+        ),
+        const SizedBox(height: 14),
+        Text(hasSearch ? 'No results found' : 'No branches yet',
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827))),
+        const SizedBox(height: 4),
+        Text(
+            hasSearch
+                ? 'Try a different search term.'
+                : 'Add your first branch to get started.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+        if (!hasSearch) ...[
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _openForm(),
+            icon: const Icon(Icons.add_rounded, size: 15),
+            label: const Text('Add Branch', style: TextStyle(fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
 }
 
-const _kColHeader =
-    TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600);
+const _kHdr = TextStyle(
+    fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
 
 // ── Branch form panel ──────────────────────────────────────────────────────────
 class BranchFormPanel extends StatefulWidget {

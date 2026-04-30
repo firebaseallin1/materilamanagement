@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -34,18 +35,29 @@ class _ReportsScreenState extends State<ReportsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reports'),
-        bottom: TabBar(
-          controller: _tabCtrl,
-          isScrollable: true,
-          tabs: _reports.map((r) => Tab(text: r.label)).toList(),
+      body: Column(children: [
+        ScreenHeader(
+          title: 'Reports',
+          subtitle: 'View comprehensive analytics and operational reports',
         ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: _reports.map((r) => _ReportView(report: r)).toList(),
-      ),
+        Container(
+          color: const Color(0xFFF8F9FA),
+          child: TabBar(
+            controller: _tabCtrl,
+            isScrollable: true,
+            labelColor: const Color(0xFF1B3A27),
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: const Color(0xFF1B3A27),
+            tabs: _reports.map((r) => Tab(text: r.label)).toList(),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabCtrl,
+            children: _reports.map((r) => _ReportView(report: r)).toList(),
+          ),
+        ),
+      ]),
     );
   }
 }

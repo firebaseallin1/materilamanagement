@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -40,12 +41,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Attendance'), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceFormScreen())); _load(); },
         icon: const Icon(Icons.add), label: const Text('Mark Attendance'),
       ),
-      body: _loading
+      body: Column(children: [
+        ScreenHeader(
+          title: 'Attendance',
+          subtitle: 'Track daily attendance records for your workforce',
+          onRefresh: _load,
+        ),
+        Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
               ? const EmptyState(message: 'No attendance records', icon: Icons.how_to_reg)
@@ -84,6 +90,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     },
                   ),
                 ),
+        ),
+      ]),
     );
   }
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/material_movement_list.dart';
+import '../../widgets/screen_header.dart';
 
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
@@ -39,12 +40,6 @@ class _StockScreenState extends State<StockScreen> {
       (i['branch']?['name'] ?? '').toLowerCase().contains(_search.toLowerCase())).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Material Stock'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-        ],
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await Navigator.push(context, MaterialPageRoute(builder: (_) => const StockFormScreen()));
@@ -54,6 +49,11 @@ class _StockScreenState extends State<StockScreen> {
         label: const Text('Add Stock'),
       ),
       body: Column(children: [
+        ScreenHeader(
+          title: 'Material Stock',
+          subtitle: 'Monitor inventory levels and stock movements',
+          onRefresh: _load,
+        ),
         Padding(
           padding: const EdgeInsets.all(12),
           child: TextField(
@@ -72,17 +72,17 @@ class _StockScreenState extends State<StockScreen> {
                   ? const EmptyState(message: 'No stock entries', icon: Icons.inventory_2)
                   : RefreshIndicator(
                       onRefresh: _load,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) => _StockCard(
-                          item: filtered[i],
-                          onEdit: () async {
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(12),
+                        child: MaterialMovementList(
+                          items: filtered,
+                          onEdit: (item) async {
                             await Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => StockFormScreen(item: filtered[i])));
+                              builder: (_) => StockFormScreen(item: item)));
                             _load();
                           },
-                          onDelete: () => _delete(filtered[i]['_id']),
+                          onDelete: (item) => _delete(item['_id']),
                         ),
                       ),
                     ),
@@ -92,64 +92,6 @@ class _StockScreenState extends State<StockScreen> {
   }
 }
 
-class _StockCard extends StatelessWidget {
-  final Map item;
-  final VoidCallback onEdit, onDelete;
-  const _StockCard({required this.item, required this.onEdit, required this.onDelete});
-
-  @override
-  Widget build(BuildContext context) {
-    final isIn = item['type'] == 'in';
-    final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
-        : '—';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: isIn ? Colors.green.shade50 : Colors.red.shade50,
-          child: Icon(isIn ? Icons.add : Icons.remove,
-              color: isIn ? Colors.green : Colors.red),
-        ),
-        title: Text(item['material']?['name'] ?? '—',
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(item['branch']?['name'] ?? '—'),
-            Text(date, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('${isIn ? '+' : '-'}${item['quantity']}',
-                    style: TextStyle(
-                        color: isIn ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18)),
-                Text(item['material']?['unit'] ?? '',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              ],
-            ),
-            PopupMenuButton(
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
-              onSelected: (v) { if (v == 'edit') onEdit(); else onDelete(); },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class StockFormScreen extends StatefulWidget {
   final Map? item;

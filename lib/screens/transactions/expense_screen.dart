@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 class ExpenseScreen extends StatefulWidget {
   const ExpenseScreen({super.key});
@@ -32,26 +33,25 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   Widget build(BuildContext context) {
     final total = _items.fold<num>(0, (s, i) => s + (i['amount'] ?? 0));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expenses'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(36),
-          child: Container(
-            color: Colors.orange.shade700,
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Text('Total: ₹${total.toStringAsFixed(2)}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ),
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const ExpenseFormScreen())); _load(); },
         icon: const Icon(Icons.add), label: const Text('Add Expense'),
       ),
-      body: _loading
+      body: Column(children: [
+        ScreenHeader(
+          title: 'Expenses',
+          subtitle: 'Track and manage operational expenses',
+          onRefresh: _load,
+        ),
+        Container(
+          color: Colors.orange.shade700,
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text('Total: ₹${total.toStringAsFixed(2)}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+        Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
               ? const EmptyState(message: 'No expenses', icon: Icons.receipt_long)
@@ -85,6 +85,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                     },
                   ),
                 ),
+        ),
+      ]),
     );
   }
 }

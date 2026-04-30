@@ -31,7 +31,7 @@ class MMSApp extends StatelessWidget {
         ),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1976D2),
+          backgroundColor: Color(0xFF1B3A27),
           foregroundColor: Colors.white,
           elevation: 0,
         ),

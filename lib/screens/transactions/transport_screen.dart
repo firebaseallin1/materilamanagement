@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 // ════════════════════════════════════════════════
 // TRANSPORT SCREEN
@@ -34,12 +35,17 @@ class _TransportScreenState extends State<TransportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Transport'), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const TransportFormScreen())); _load(); },
         icon: const Icon(Icons.add), label: const Text('Add Transport'),
       ),
-      body: _loading
+      body: Column(children: [
+        ScreenHeader(
+          title: 'Transport',
+          subtitle: 'Manage vehicle transport and delivery records',
+          onRefresh: _load,
+        ),
+        Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
               ? const EmptyState(message: 'No transport records', icon: Icons.local_shipping)
@@ -70,6 +76,8 @@ class _TransportScreenState extends State<TransportScreen> {
                     },
                   ),
                 ),
+        ),
+      ]),
     );
   }
 }

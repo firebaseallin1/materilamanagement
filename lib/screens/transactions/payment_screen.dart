@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/screen_header.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
@@ -31,12 +32,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Payments'), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentFormScreen())); _load(); },
         icon: const Icon(Icons.add), label: const Text('Add Payment'),
       ),
-      body: _loading
+      body: Column(children: [
+        ScreenHeader(
+          title: 'Payments',
+          subtitle: 'Record and monitor financial payment transactions',
+          onRefresh: _load,
+        ),
+        Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
               ? const EmptyState(message: 'No payments', icon: Icons.payment)
@@ -77,6 +83,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     },
                   ),
                 ),
+        ),
+      ]),
     );
   }
 }
