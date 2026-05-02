@@ -2,13 +2,26 @@ const mongoose = require('mongoose');
 
 // Material Stock
 const stockSchema = new mongoose.Schema({
-  material: { type: mongoose.Schema.Types.ObjectId, ref: 'Material', required: true },
-  branch: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', required: true },
-  type: { type: String, enum: ['in', 'out'], required: true },
-  quantity: { type: Number, required: true, min: 0 },
-  date: { type: Date, required: true, default: Date.now },
-  remarks: { type: String },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  material:        { type: mongoose.Schema.Types.ObjectId, ref: 'Material', required: true },
+  branch:          { type: mongoose.Schema.Types.ObjectId, ref: 'Branch',   required: true },
+  type:            { type: String, enum: ['in', 'out'], required: true },
+  quantity:        { type: Number, required: true, min: 0 },
+  date:            { type: Date, required: true, default: Date.now },
+  remarks:         { type: String },
+  // 'store' = initial stock addition, 'stock_move' = inter-branch transfer
+  transactionType: { type: String, enum: ['store', 'stock_move'], default: 'store' },
+  // For stock_move: source and destination branches
+  fromBranch:      { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+  toBranch:        { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+  // Links the two ledger records created by one stock_move event
+  transferRef:     { type: String, index: true },
+  // Transport details (for stock_move)
+  transportName:   { type: String },
+  driverName:      { type: String },
+  vehicleName:     { type: String },
+  distance:        { type: Number },
+  cost:            { type: Number },
+  createdBy:       { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
 // Measurement
