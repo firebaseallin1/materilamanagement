@@ -15,28 +15,60 @@ class _BranchScreenState extends State<BranchScreen> {
   List _locations = [];
   bool _loading = true;
   String _search = '';
-  int _tabIndex = 0; // 0=All 1=Active 2=Inactive
-  final _searchCtrl = TextEditingController();
+  int _tabIndex = 0; // 0=All  1=Active  2=Inactive
+  String _sortBy = 'name_asc'; // name_asc | name_desc | location
+  String? _filterLocationId;
+
+  final _searchCtrl = TextEditingController(); // mobile only
 
   static const _primary = Color(0xFF111827);
   static const _green = Color(0xFF16A34A);
 
+  // ── Filtered + sorted list ───────────────────────────────────────────────
+
   List get _filtered {
-    return _branches.where((b) {
-      final matchSearch = _search.isEmpty ||
-          (b['name'] ?? '').toLowerCase().contains(_search.toLowerCase());
-      final isActive = (b['active'] ?? true) as bool;
+    final q = _search.toLowerCase();
+    var list = _branches.where((b) {
+      final matchSearch =
+          q.isEmpty || (b['name'] ?? '').toString().toLowerCase().contains(q);
+      final isActive = b['isActive'] ?? b['active'] ?? true;
       final matchTab = _tabIndex == 0 ||
-          (_tabIndex == 1 && isActive) ||
-          (_tabIndex == 2 && !isActive);
-      return matchSearch && matchTab;
+          (_tabIndex == 1 && isActive == true) ||
+          (_tabIndex == 2 && isActive != true);
+      final matchLoc = _filterLocationId == null ||
+          b['location']?['_id'] == _filterLocationId;
+      return matchSearch && matchTab && matchLoc;
     }).toList();
+
+    list.sort((a, b) {
+      switch (_sortBy) {
+        case 'name_desc':
+          return (b['name'] ?? '').compareTo(a['name'] ?? '');
+        case 'location':
+          return (a['location']?['name'] ?? '')
+              .compareTo(b['location']?['name'] ?? '');
+        default:
+          return (a['name'] ?? '').compareTo(b['name'] ?? '');
+      }
+    });
+
+    return list;
   }
+
+  int get _activeFilterCount => _filterLocationId != null ? 1 : 0;
+
+  // ── Init / load ──────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -53,6 +85,8 @@ class _BranchScreenState extends State<BranchScreen> {
       });
     }
   }
+
+  // ── Form panel ───────────────────────────────────────────────────────────
 
   void _openForm([Map? branch]) {
     final sw = MediaQuery.of(context).size.width;
@@ -84,7 +118,67 @@ class _BranchScreenState extends State<BranchScreen> {
     );
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Sort dialog ──────────────────────────────────────────────────────────
+
+  void _showSortMenu(BuildContext anchorCtx) {
+    final items = {
+      'name_asc': 'Name A → Z',
+      'name_desc': 'Name Z → A',
+      'location': 'By Location',
+    };
+    showMenu<String>(
+      context: anchorCtx,
+      position: _buttonPosition(anchorCtx),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      elevation: 4,
+      items: items.entries.map((e) {
+        final active = _sortBy == e.key;
+        return PopupMenuItem<String>(
+          value: e.key,
+          child: Row(children: [
+            Icon(
+              active
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 16,
+              color: active ? _green : const Color(0xFFD1D5DB),
+            ),
+            const SizedBox(width: 10),
+            Text(e.value,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: active ? _green : const Color(0xFF374151),
+                    fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
+          ]),
+        );
+      }).toList(),
+    ).then((val) {
+      if (val != null) setState(() => _sortBy = val);
+    });
+  }
+
+  // ── Filter dialog ────────────────────────────────────────────────────────
+
+  void _showFilterDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.25),
+      builder: (ctx) => _FilterDialog(
+        locations: _locations,
+        selectedLocationId: _filterLocationId,
+        onApply: (locId) {
+          setState(() => _filterLocationId = locId);
+          Navigator.pop(ctx);
+        },
+        onClear: () {
+          setState(() => _filterLocationId = null);
+          Navigator.pop(ctx);
+        },
+      ),
+    );
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +194,10 @@ class _BranchScreenState extends State<BranchScreen> {
               title: 'Branches',
               subtitle: 'Manage company branches and regional offices',
               onRefresh: _load,
+              onSearchChanged: (v) => setState(() => _search = v),
+              searchHint: 'Search branches...',
+              onAdd: _openForm,
+              addLabel: 'Add Branch',
             ),
             if (!isMobile) _buildTabBar(),
             _buildToolbar(isMobile),
@@ -121,29 +219,7 @@ class _BranchScreenState extends State<BranchScreen> {
     );
   }
 
-  // ── Title bar ────────────────────────────────────────────────────────────────
-
-  Widget _addBtn(bool compact) => ElevatedButton(
-        onPressed: () => _openForm(),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size(0, 34),
-          padding:
-              EdgeInsets.symmetric(horizontal: compact ? 10 : 14, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.add_rounded, size: 16),
-          if (!compact) const SizedBox(width: 4),
-          if (!compact)
-            const Text('Add Branch',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-        ]),
-      );
-
-  // ── Tab bar ──────────────────────────────────────────────────────────────────
+  // ── Tab bar ──────────────────────────────────────────────────────────────
 
   Widget _buildTabBar() {
     final tabs = ['All Branches', 'Active', 'Inactive'];
@@ -180,7 +256,7 @@ class _BranchScreenState extends State<BranchScreen> {
     );
   }
 
-  // ── Toolbar ──────────────────────────────────────────────────────────────────
+  // ── Toolbar ──────────────────────────────────────────────────────────────
 
   Widget _buildToolbar(bool isMobile) {
     return Padding(
@@ -188,36 +264,45 @@ class _BranchScreenState extends State<BranchScreen> {
           EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
         children: [
-          // Search
-          Container(
-            width: isMobile ? 140 : 200,
-            height: 34,
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFD1D5DB)),
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _search = v),
-              style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-              decoration: const InputDecoration(
-                hintText: 'Search...',
-                hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                prefixIcon: Icon(Icons.search_rounded,
-                    size: 16, color: Color(0xFF9CA3AF)),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.only(top: 8),
+          // Mobile: search field
+          if (isMobile) ...[
+            Expanded(
+              child: Container(
+                height: 34,
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFD1D5DB)),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _search = v),
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                  decoration: const InputDecoration(
+                    hintText: 'Search...',
+                    hintStyle:
+                        TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        size: 16, color: Color(0xFF9CA3AF)),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.only(top: 8),
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          if (!isMobile) ...[
-            _toolbarBtn(Icons.swap_vert_rounded, 'Sort'),
             const SizedBox(width: 8),
-            _toolbarBtn(Icons.tune_rounded, 'Filter'),
           ],
+
+          // Desktop: sort + filter
+          if (!isMobile) ...[
+            Builder(builder: (ctx) => _sortBtn(ctx)),
+            const SizedBox(width: 8),
+            _filterBtn(),
+          ],
+
           const Spacer(),
-          // Row count chip
+
+          // Row count
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -227,50 +312,145 @@ class _BranchScreenState extends State<BranchScreen> {
             child: Text('${_filtered.length} rows',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
           ),
-          const SizedBox(width: 8),
-          _addBtn(isMobile),
+
+          // Mobile: compact add button
+          if (isMobile) ...[
+            const SizedBox(width: 8),
+            _addBtn(),
+          ],
         ],
       ),
     );
   }
 
-  Widget _toolbarBtn(IconData icon, String label) => OutlinedButton.icon(
-        onPressed: () {},
-        icon: Icon(icon, size: 14, color: const Color(0xFF6B7280)),
-        label: Text(label,
-            style: const TextStyle(
+  // ── Sort button ──────────────────────────────────────────────────────────
+
+  Widget _sortBtn(BuildContext ctx) {
+    const labels = {
+      'name_asc': 'Name A → Z',
+      'name_desc': 'Name Z → A',
+      'location': 'By Location',
+    };
+    final sorted = _sortBy != 'name_asc';
+    return _toolbarSurface(
+      onTap: () => _showSortMenu(ctx),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.swap_vert_rounded,
+            size: 14, color: sorted ? _green : const Color(0xFF6B7280)),
+        const SizedBox(width: 6),
+        Text(labels[_sortBy] ?? 'Sort',
+            style: TextStyle(
                 fontSize: 13,
-                color: Color(0xFF374151),
-                fontWeight: FontWeight.w400)),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          minimumSize: Size.zero,
-          side: const BorderSide(color: Color(0xFFD1D5DB)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                color: sorted ? _green : const Color(0xFF374151),
+                fontWeight: sorted ? FontWeight.w500 : FontWeight.w400)),
+      ]),
+    );
+  }
+
+  // ── Filter button ────────────────────────────────────────────────────────
+
+  Widget _filterBtn() {
+    final count = _activeFilterCount;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _toolbarSurface(
+          onTap: _showFilterDialog,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.tune_rounded,
+                size: 14, color: count > 0 ? _green : const Color(0xFF6B7280)),
+            const SizedBox(width: 6),
+            Text('Filter',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: count > 0 ? _green : const Color(0xFF374151),
+                    fontWeight: count > 0 ? FontWeight.w600 : FontWeight.w400)),
+          ]),
         ),
+        if (count > 0)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration:
+                  const BoxDecoration(color: _green, shape: BoxShape.circle),
+              child: Center(
+                child: Text('$count',
+                    style: const TextStyle(
+                        fontSize: 9,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _toolbarSurface({required VoidCallback onTap, required Widget child}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFD1D5DB)),
+          borderRadius: BorderRadius.circular(7),
+          color: Colors.white,
+        ),
+        child: child,
+      ),
+    );
+  }
+
+  RelativeRect _buttonPosition(BuildContext ctx) {
+    final box = ctx.findRenderObject() as RenderBox;
+    final offset = box.localToGlobal(Offset.zero);
+    return RelativeRect.fromLTRB(
+      offset.dx,
+      offset.dy + box.size.height + 4,
+      offset.dx + box.size.width,
+      0,
+    );
+  }
+
+  // ── Add button (mobile / compact) ────────────────────────────────────────
+
+  Widget _addBtn() => ElevatedButton(
+        onPressed: _openForm,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          minimumSize: const Size(0, 34),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: const Icon(Icons.add_rounded, size: 16),
       );
 
-  // ── Desktop table ────────────────────────────────────────────────────────────
+  // ── Desktop table ────────────────────────────────────────────────────────
 
   Widget _buildTable(List rows) {
     return Column(
       children: [
-        // Header row
         Container(
           color: const Color(0xFFF9FAFB),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Row(children: [
-            const SizedBox(width: 28, child: Text('#', style: _kHdr)),
-            const SizedBox(width: 12),
-            const Expanded(flex: 3, child: Text('Branch Name', style: _kHdr)),
-            const Expanded(flex: 2, child: Text('Location', style: _kHdr)),
-            const Expanded(flex: 2, child: Text('Contact', style: _kHdr)),
-            const Expanded(flex: 2, child: Text('Phone', style: _kHdr)),
-            const SizedBox(
+          child: const Row(children: [
+            SizedBox(width: 28, child: Text('#', style: _kHdr)),
+            SizedBox(width: 12),
+            Expanded(flex: 3, child: Text('Branch Name', style: _kHdr)),
+            Expanded(flex: 2, child: Text('Location', style: _kHdr)),
+            Expanded(flex: 2, child: Text('Contact', style: _kHdr)),
+            Expanded(flex: 2, child: Text('Phone', style: _kHdr)),
+            SizedBox(
                 width: 88,
                 child:
                     Text('Status', style: _kHdr, textAlign: TextAlign.center)),
-            const SizedBox(width: 40),
+            SizedBox(width: 40),
           ]),
         ),
         const Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -285,7 +465,7 @@ class _BranchScreenState extends State<BranchScreen> {
   }
 
   Widget _buildRow(Map b, int index) {
-    final isActive = (b['active'] ?? true) as bool;
+    final isActive = b['isActive'] ?? b['active'] ?? true;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -317,7 +497,9 @@ class _BranchScreenState extends State<BranchScreen> {
                       const TextStyle(fontSize: 13, color: Color(0xFF374151))),
             ),
             Expanded(flex: 2, child: _phoneCell(b['phone'])),
-            SizedBox(width: 88, child: Center(child: _statusBadge(isActive))),
+            SizedBox(
+                width: 88,
+                child: Center(child: _statusBadge(isActive == true))),
             _actionMenu(b),
           ]),
         ),
@@ -325,7 +507,7 @@ class _BranchScreenState extends State<BranchScreen> {
     );
   }
 
-  // ── Mobile list ──────────────────────────────────────────────────────────────
+  // ── Mobile list ──────────────────────────────────────────────────────────
 
   Widget _buildMobileList(List rows) {
     return ListView.separated(
@@ -337,7 +519,7 @@ class _BranchScreenState extends State<BranchScreen> {
   }
 
   Widget _mobileCard(Map b, int index) {
-    final isActive = (b['active'] ?? true) as bool;
+    final isActive = b['isActive'] ?? b['active'] ?? true;
     return InkWell(
       onTap: () => _openForm(b),
       borderRadius: BorderRadius.circular(10),
@@ -367,14 +549,14 @@ class _BranchScreenState extends State<BranchScreen> {
             ]),
           ),
           const SizedBox(width: 8),
-          _statusBadge(isActive),
+          _statusBadge(isActive == true),
           _actionMenu(b),
         ]),
       ),
     );
   }
 
-  // ── Cells ────────────────────────────────────────────────────────────────────
+  // ── Cells ────────────────────────────────────────────────────────────────
 
   Widget _nameCell(Map b, int index) {
     return Row(children: [
@@ -457,17 +639,17 @@ class _BranchScreenState extends State<BranchScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         elevation: 3,
         itemBuilder: (_) => [
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 'edit',
-            child: Row(children: const [
+            child: Row(children: [
               Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
               SizedBox(width: 8),
               Text('Edit', style: TextStyle(fontSize: 13)),
             ]),
           ),
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 'delete',
-            child: Row(children: const [
+            child: Row(children: [
               Icon(Icons.delete_outline_rounded,
                   size: 15, color: Color(0xFFDC2626)),
               SizedBox(width: 8),
@@ -483,10 +665,10 @@ class _BranchScreenState extends State<BranchScreen> {
     );
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────────
+  // ── Empty state ──────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
-    final hasSearch = _search.isNotEmpty;
+    final hasFilter = _search.isNotEmpty || _activeFilterCount > 0;
     return Center(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
@@ -499,21 +681,31 @@ class _BranchScreenState extends State<BranchScreen> {
               size: 28, color: Color(0xFF9CA3AF)),
         ),
         const SizedBox(height: 14),
-        Text(hasSearch ? 'No results found' : 'No branches yet',
+        Text(hasFilter ? 'No results found' : 'No branches yet',
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF111827))),
         const SizedBox(height: 4),
         Text(
-            hasSearch
-                ? 'Try a different search term.'
+            hasFilter
+                ? 'Try adjusting your search or filters.'
                 : 'Add your first branch to get started.',
             style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-        if (!hasSearch) ...[
+        if (hasFilter) ...[
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => setState(() {
+              _search = '';
+              _searchCtrl.clear();
+              _filterLocationId = null;
+            }),
+            child: const Text('Clear filters', style: TextStyle(color: _green)),
+          ),
+        ] else ...[
           const SizedBox(height: 16),
           ElevatedButton.icon(
-            onPressed: () => _openForm(),
+            onPressed: _openForm,
             icon: const Icon(Icons.add_rounded, size: 15),
             label: const Text('Add Branch', style: TextStyle(fontSize: 13)),
             style: ElevatedButton.styleFrom(
@@ -531,10 +723,159 @@ class _BranchScreenState extends State<BranchScreen> {
   }
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 const _kHdr = TextStyle(
     fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
 
-// ── Branch form panel ──────────────────────────────────────────────────────────
+// ── Filter dialog ─────────────────────────────────────────────────────────────
+
+class _FilterDialog extends StatefulWidget {
+  final List locations;
+  final String? selectedLocationId;
+  final void Function(String?) onApply;
+  final VoidCallback onClear;
+
+  const _FilterDialog({
+    required this.locations,
+    required this.selectedLocationId,
+    required this.onApply,
+    required this.onClear,
+  });
+
+  @override
+  State<_FilterDialog> createState() => _FilterDialogState();
+}
+
+class _FilterDialogState extends State<_FilterDialog> {
+  String? _locId;
+
+  @override
+  void initState() {
+    super.initState();
+    _locId = widget.selectedLocationId;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 12, 0),
+      contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      title: Row(children: [
+        const Text('Filter',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        const Spacer(),
+        TextButton(
+          onPressed: widget.onClear,
+          style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4)),
+          child: const Text('Clear all',
+              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+        ),
+      ]),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('LOCATION',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF9CA3AF),
+                    letterSpacing: 0.6)),
+            const SizedBox(height: 10),
+            if (widget.locations.isEmpty)
+              const Text('No locations available.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))
+            else
+              Wrap(
+                spacing: 7,
+                runSpacing: 7,
+                children: [
+                  _Chip(
+                    label: 'All',
+                    selected: _locId == null,
+                    onTap: () => setState(() => _locId = null),
+                  ),
+                  ...widget.locations.map((l) => _Chip(
+                        label: l['name'] ?? '',
+                        selected: _locId == l['_id'],
+                        onTap: () => setState(() => _locId = l['_id']),
+                      )),
+                ],
+              ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFFD1D5DB)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+          child: const Text('Cancel',
+              style: TextStyle(color: Color(0xFF374151), fontSize: 13)),
+        ),
+        ElevatedButton(
+          onPressed: () => widget.onApply(_locId),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF16A34A),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          ),
+          child: const Text('Apply', style: TextStyle(fontSize: 13)),
+        ),
+      ],
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _Chip(
+      {required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF16A34A) : const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                color: selected ? Colors.white : const Color(0xFF374151))),
+      ),
+    );
+  }
+}
+
+// ── Branch form panel ─────────────────────────────────────────────────────────
+
 class BranchFormPanel extends StatefulWidget {
   final Map? branch;
   final List locations;
@@ -641,7 +982,6 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Drag handle ──────────────────────────────────────────────────
         const SizedBox(height: 10),
         Container(
           width: 36,
@@ -652,8 +992,6 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
           ),
         ),
         const SizedBox(height: 2),
-
-        // ── Gradient header ──────────────────────────────────────────────
         Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -710,8 +1048,6 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
             ),
           ]),
         ),
-
-        // ── Form fields ──────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
           child: Form(
@@ -728,9 +1064,8 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
                       v!.trim().isEmpty ? 'Branch name is required' : null,
                 ),
                 const SizedBox(height: 14),
-
-                // Location dropdown styled to match
                 DropdownButtonFormField<String>(
+                  // ignore: deprecated_member_use
                   value: _locationId,
                   decoration:
                       _fieldDecoration('Location', Icons.location_on_outlined),
@@ -748,7 +1083,6 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
                   isExpanded: true,
                 ),
                 const SizedBox(height: 14),
-
                 TextFormField(
                   controller: _contactCtrl,
                   decoration: _fieldDecoration(
@@ -756,7 +1090,6 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
                       hint: 'Optional'),
                 ),
                 const SizedBox(height: 14),
-
                 TextFormField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
@@ -765,8 +1098,6 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
                       hint: 'Optional'),
                 ),
                 const SizedBox(height: 24),
-
-                // ── Action buttons ───────────────────────────────────────
                 Row(children: [
                   Expanded(
                     child: OutlinedButton(

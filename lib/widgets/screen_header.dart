@@ -6,12 +6,20 @@ class ScreenHeader extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onRefresh;
+  final ValueChanged<String>? onSearchChanged;
+  final String? searchHint;
+  final VoidCallback? onAdd;
+  final String? addLabel;
 
   const ScreenHeader({
     super.key,
     required this.title,
     required this.subtitle,
     this.onRefresh,
+    this.onSearchChanged,
+    this.searchHint,
+    this.onAdd,
+    this.addLabel,
   });
 
   @override
@@ -19,16 +27,14 @@ class ScreenHeader extends StatelessWidget {
     final auth = context.read<AuthService>();
     return LayoutBuilder(builder: (context, constraints) {
       final isWide = constraints.maxWidth >= 600;
+      final h = isWide ? 28.0 : 16.0;
       return Container(
         width: double.infinity,
         color: Colors.white,
-        padding: EdgeInsets.symmetric(
-          horizontal: isWide ? 28 : 16,
-          vertical: 20,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: h, vertical: 20),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: Column(
@@ -46,61 +52,128 @@ class ScreenHeader extends StatelessWidget {
               ),
             ),
             if (isWide)
-              Row(children: [
-                _HeaderIconBtn(
-                    icon: Icons.mail_outline_rounded, onTap: () {}),
-                const SizedBox(width: 6),
-                _HeaderIconBtn(
-                    icon: Icons.notifications_none_rounded, onTap: () {}),
-                const SizedBox(width: 6),
-                _HeaderIconBtn(
-                  icon: onRefresh != null
-                      ? Icons.refresh_rounded
-                      : Icons.menu_rounded,
-                  onTap: onRefresh ?? () {},
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: SizedBox(height: 28, child: VerticalDivider()),
-                ),
-                PopupMenuButton<String>(
-                  offset: const Offset(0, 44),
-                  tooltip: '',
-                  child: CircleAvatar(
-                    radius: 17,
-                    backgroundColor: const Color(0xFF2E7D52),
-                    child: Text(
-                      _initials(auth.userName),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (onSearchChanged != null) ...[
+                    SizedBox(
+                      width: 220,
+                      height: 36,
+                      child: TextField(
+                        onChanged: onSearchChanged,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: searchHint ?? 'Search...',
+                          hintStyle: const TextStyle(
+                              fontSize: 13, color: Color(0xFFAAAAAA)),
+                          prefixIcon: const Icon(Icons.search,
+                              size: 18, color: Color(0xFFAAAAAA)),
+                          filled: true,
+                          fillColor: const Color(0xFFF5F5F5),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 8),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide:
+                                BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                        enabled: false,
-                        child: Text(auth.userName,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold))),
-                    PopupMenuItem(
-                        enabled: false,
-                        child: Text(auth.userRole.toUpperCase(),
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey))),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                        value: 'logout', child: Text('Logout')),
+                    const SizedBox(width: 10),
                   ],
-                  onSelected: (v) {
-                    if (v == 'logout') auth.logout();
-                  },
-                ),
-              ]),
+                  if (onAdd != null) ...[
+                    _AddButton(label: addLabel ?? 'Add', onTap: onAdd!),
+                    const SizedBox(width: 14),
+                  ],
+                  _HeaderIconBtn(
+                      icon: Icons.mail_outline_rounded, onTap: () {}),
+                  const SizedBox(width: 6),
+                  _HeaderIconBtn(
+                      icon: Icons.notifications_none_rounded, onTap: () {}),
+                  const SizedBox(width: 6),
+                  _HeaderIconBtn(
+                    icon: onRefresh != null
+                        ? Icons.refresh_rounded
+                        : Icons.menu_rounded,
+                    onTap: onRefresh ?? () {},
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: SizedBox(height: 28, child: VerticalDivider()),
+                  ),
+                  PopupMenuButton<String>(
+                    offset: const Offset(0, 44),
+                    tooltip: '',
+                    child: CircleAvatar(
+                      radius: 17,
+                      backgroundColor: const Color(0xFF2E7D52),
+                      child: Text(
+                        _initials(auth.userName),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                    ),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                          enabled: false,
+                          child: Text(auth.userName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold))),
+                      PopupMenuItem(
+                          enabled: false,
+                          child: Text(auth.userRole.toUpperCase(),
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey))),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
+                          value: 'logout', child: Text('Logout')),
+                    ],
+                    onSelected: (v) {
+                      if (v == 'logout') auth.logout();
+                    },
+                  ),
+                ],
+              ),
           ],
         ),
       );
     });
+  }
+}
+
+class _AddButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _AddButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: const Icon(Icons.add_rounded, size: 16),
+        label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2E7D52),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
   }
 }
 
