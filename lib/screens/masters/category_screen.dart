@@ -808,9 +808,10 @@ class MaterialFormPanel extends StatefulWidget {
 
 class _MaterialFormPanelState extends State<MaterialFormPanel> {
   final _formKey = GlobalKey<FormState>();
-  String? _categoryId, _unit = 'pcs';
+  String? _unit = 'pcs';
   final _nameCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
+  final _categoryCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   bool _saving = false;
 
@@ -825,7 +826,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
       _codeCtrl.text = widget.item!['code'] ?? '';
       _descCtrl.text = widget.item!['description'] ?? '';
       _unit = widget.item!['unit'] ?? 'pcs';
-      _categoryId = widget.item!['category']?['_id'];
+      _categoryCtrl.text = widget.item!['category']?['name'] ?? '';
     }
   }
 
@@ -833,6 +834,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
   void dispose() {
     _nameCtrl.dispose();
     _codeCtrl.dispose();
+    _categoryCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
@@ -844,7 +846,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
     final body = {
       'name': _nameCtrl.text.trim(),
       'code': _codeCtrl.text.trim(),
-      'category': _categoryId,
+      'category': _categoryCtrl.text.trim(),
       'unit': _unit,
       'description': _descCtrl.text.trim(),
     };
@@ -1004,23 +1006,13 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
                         hint: 'Optional (e.g. STL-001)'),
                   ),
                   const SizedBox(height: 14),
-                  DropdownButtonFormField<String>(
-                    initialValue: _categoryId,
+                  TextFormField(
+                    controller: _categoryCtrl,
                     decoration: _fieldDecoration(
                         'Category', Icons.category_outlined),
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF1A1A2E)),
-                    borderRadius: BorderRadius.circular(10),
-                    items: widget.categories
-                        .map<DropdownMenuItem<String>>((c) =>
-                            DropdownMenuItem(
-                                value: c['_id'] as String,
-                                child: Text(c['name'] as String)))
-                        .toList(),
-                    onChanged: (v) => setState(() => _categoryId = v),
-                    validator: (v) =>
-                        v == null ? 'Please select a category' : null,
-                    isExpanded: true,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Please enter a category'
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
