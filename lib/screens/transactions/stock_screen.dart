@@ -137,14 +137,116 @@ class _TotalStockTabState extends State<_TotalStockTab> {
           message: 'No stock data', icon: Icons.inventory_2_outlined);
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: filtered.length,
-        itemBuilder: (_, i) => _TotalStockCard(item: filtered[i]),
+    return LayoutBuilder(builder: (_, constraints) {
+      final isMobile = constraints.maxWidth < 700;
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: isMobile
+            ? ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: filtered.length,
+                itemBuilder: (_, i) => _TotalStockCard(item: filtered[i]),
+              )
+            : _buildDesktopTable(filtered),
+      );
+    });
+  }
+
+  Widget _buildDesktopTable(List filtered) {
+    const hdr = TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
+    return Column(children: [
+      Container(
+        color: const Color(0xFFF9FAFB),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: const Row(children: [
+          SizedBox(width: 40, child: Text('#', style: hdr)),
+          Expanded(flex: 3, child: Text('MATERIAL', style: hdr)),
+          SizedBox(width: 60, child: Text('CODE', style: hdr)),
+          SizedBox(width: 50, child: Text('UNIT', style: hdr)),
+          SizedBox(width: 80, child: Text('STORED', style: hdr, textAlign: TextAlign.right)),
+          SizedBox(width: 80, child: Text('MOVED', style: hdr, textAlign: TextAlign.right)),
+          SizedBox(width: 95, child: Text('BALANCE', style: hdr, textAlign: TextAlign.right)),
+          Expanded(flex: 2, child: Text('UTILIZED', style: hdr)),
+        ]),
       ),
-    );
+      Expanded(child: ListView.builder(
+        itemCount: filtered.length,
+        itemBuilder: (_, i) {
+          final item     = filtered[i];
+          final name     = (item['material']?['name'] ?? '—') as String;
+          final code     = (item['material']?['code'] ?? '—') as String;
+          final unit     = (item['material']?['unit'] ?? 'pcs') as String;
+          final balance  = (item['balance']  as num? ?? 0).toDouble();
+          final stored   = (item['stored']   as num? ?? 0).toDouble();
+          final moved    = (item['moved']    as num? ?? 0).toDouble();
+          final totalIn  = (item['totalIn']  as num? ?? 0).toDouble();
+          final totalOut = (item['totalOut'] as num? ?? 0).toDouble();
+          final ratio    = totalIn > 0 ? (totalOut / totalIn).clamp(0.0, 1.0) : 0.0;
+          final lowStock = balance >= 0 && ratio > 0.85;
+          return InkWell(
+            hoverColor: const Color(0xFFF0FDF4),
+            child: Container(
+              decoration: BoxDecoration(
+                border: const Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
+                color: lowStock ? const Color(0xFFFFF8F8) : Colors.white,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              child: Row(children: [
+                SizedBox(width: 40, child: Text('${i + 1}', style: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
+                Expanded(flex: 3, child: Row(children: [
+                  Container(
+                    width: 30, height: 30,
+                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(7)),
+                    child: Icon(_matIcon(name), size: 15, color: const Color(0xFF2E7D52)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827)), overflow: TextOverflow.ellipsis)),
+                ])),
+                SizedBox(width: 60, child: Text(code, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))),
+                SizedBox(width: 50, child: Text(unit, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)))),
+                SizedBox(width: 80, child: Text('+${_fmt(stored)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF2E7D32)), textAlign: TextAlign.right)),
+                SizedBox(width: 80, child: Text(_fmt(moved), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF6A1B9A)), textAlign: TextAlign.right)),
+                SizedBox(width: 95, child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: balance > 0 ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(_fmt(balance), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: balance > 0 ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F))),
+                  ),
+                )),
+                Expanded(flex: 2, child: Padding(
+                  padding: const EdgeInsets.only(left: 14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: ratio,
+                        minHeight: 5,
+                        backgroundColor: const Color(0xFFE8F5E9),
+                        valueColor: AlwaysStoppedAnimation<Color>(ratio > 0.85 ? const Color(0xFFD32F2F) : const Color(0xFF2E7D32)),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(children: [
+                      Text('${(ratio * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E))),
+                      if (lowStock) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFD32F2F)),
+                        const SizedBox(width: 2),
+                        const Text('Low', style: TextStyle(fontSize: 10, color: Color(0xFFD32F2F))),
+                      ],
+                    ]),
+                  ]),
+                )),
+              ]),
+            ),
+          );
+        },
+      )),
+    ]);
   }
 }
 
@@ -419,14 +521,22 @@ class _WarehouseTabState extends State<_WarehouseTab> {
           icon: Icons.warehouse_outlined);
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: filtered.length,
-        itemBuilder: (_, i) => _WarehouseCard(data: filtered[i]),
-      ),
-    );
+    return LayoutBuilder(builder: (_, constraints) {
+      final maxCardWidth = constraints.maxWidth < 700 ? double.infinity : 860.0;
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: filtered.length,
+          itemBuilder: (_, i) => Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxCardWidth),
+              child: _WarehouseCard(data: filtered[i]),
+            ),
+          ),
+        ),
+      );
+    });
   }
 }
 
@@ -738,20 +848,103 @@ class _MovementsTabState extends State<_MovementsTab> {
           message: 'No stock movements', icon: Icons.swap_vert);
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(12),
-        itemCount: filtered.length,
-        itemBuilder: (_, i) => _HistoryCard(
-          item: filtered[i],
-          onEdit: () =>
-              _openStockForm(context, item: filtered[i], onSaved: _load),
-          onDelete: () => _delete(filtered[i]['_id']),
-        ),
+    return LayoutBuilder(builder: (_, constraints) {
+      final isMobile = constraints.maxWidth < 700;
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: isMobile
+            ? ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(12),
+                itemCount: filtered.length,
+                itemBuilder: (_, i) => _HistoryCard(
+                  item: filtered[i],
+                  onEdit: () => _openStockForm(context, item: filtered[i], onSaved: _load),
+                  onDelete: () => _delete(filtered[i]['_id']),
+                ),
+              )
+            : _buildDesktopTable(filtered),
+      );
+    });
+  }
+
+  Widget _buildDesktopTable(List filtered) {
+    const hdr = TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
+    return Column(children: [
+      Container(
+        color: const Color(0xFFF9FAFB),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: const Row(children: [
+          SizedBox(width: 40, child: Text('#', style: hdr)),
+          SizedBox(width: 100, child: Text('TYPE', style: hdr)),
+          Expanded(flex: 2, child: Text('MATERIAL', style: hdr)),
+          Expanded(flex: 3, child: Text('BRANCH / ROUTE', style: hdr)),
+          SizedBox(width: 90, child: Text('QUANTITY', style: hdr, textAlign: TextAlign.right)),
+          Expanded(flex: 2, child: Text('DATE', style: hdr)),
+          SizedBox(width: 48),
+        ]),
       ),
-    );
+      Expanded(child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: filtered.length,
+        itemBuilder: (_, i) {
+          final item    = filtered[i];
+          final txType  = item['transactionType'] as String? ?? '';
+          final ledType = item['type'] as String? ?? 'in';
+          final matName = (item['material']?['name'] ?? '—') as String;
+          final matUnit = (item['material']?['unit'] ?? '') as String;
+          final qty     = (item['quantity'] as num? ?? 0).toDouble();
+          final isMove  = txType == 'stock_move';
+          final from    = (item['fromBranch']?['name'] ?? '') as String;
+          final to      = (item['toBranch']?['name']   ?? '') as String;
+          final branch  = (item['branch']?['name']     ?? '—') as String;
+          final branchLine = isMove ? '$from  →  $to' : branch;
+          final cfg = _txConfig(txType, ledType);
+          return InkWell(
+            onTap: () => _openStockForm(context, item: item, onSaved: _load),
+            hoverColor: const Color(0xFFF0FDF4),
+            child: Container(
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              child: Row(children: [
+                SizedBox(width: 40, child: Text('${i + 1}', style: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
+                SizedBox(width: 100, child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: cfg.labelBg, borderRadius: BorderRadius.circular(10)),
+                  child: Text(cfg.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cfg.labelColor), overflow: TextOverflow.ellipsis),
+                )),
+                Expanded(flex: 2, child: Text(matName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)), overflow: TextOverflow.ellipsis)),
+                Expanded(flex: 3, child: Text(branchLine, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)), overflow: TextOverflow.ellipsis)),
+                SizedBox(width: 90, child: Text('${cfg.qtyPrefix}${_fmt(qty)} $matUnit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cfg.badgeColor), textAlign: TextAlign.right)),
+                Expanded(flex: 2, child: Text(_fmtDate(item['date'] as String?), style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)))),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF9CA3AF)),
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 3,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Row(children: [
+                      Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
+                      SizedBox(width: 8),
+                      Text('Edit', style: TextStyle(fontSize: 13)),
+                    ])),
+                    PopupMenuItem(value: 'delete', child: Row(children: [
+                      Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFDC2626)),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+                    ])),
+                  ],
+                  onSelected: (v) {
+                    if (v == 'edit') _openStockForm(context, item: item, onSaved: _load);
+                    if (v == 'delete') _delete(item['_id']);
+                  },
+                ),
+              ]),
+            ),
+          );
+        },
+      )),
+    ]);
   }
 }
 
@@ -938,23 +1131,37 @@ class _HistoryCard extends StatelessWidget {
             ),
             // Actions
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert,
-                  size: 18, color: Color(0xFFBDBDBD)),
+              icon: const Icon(Icons.more_horiz_rounded,
+                  size: 18, color: Color(0xFF9CA3AF)),
               padding: EdgeInsets.zero,
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              elevation: 3,
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined,
+                        size: 15, color: Color(0xFF374151)),
+                    SizedBox(width: 8),
+                    Text('Edit', style: TextStyle(fontSize: 13)),
+                  ]),
+                ),
+                PopupMenuItem(
                   value: 'delete',
-                  child: Text('Delete',
-                      style: TextStyle(color: Colors.red)),
+                  child: Row(children: [
+                    Icon(Icons.delete_outline_rounded,
+                        size: 15, color: Color(0xFFDC2626)),
+                    SizedBox(width: 8),
+                    Text('Delete',
+                        style: TextStyle(
+                            fontSize: 13, color: Color(0xFFDC2626))),
+                  ]),
                 ),
               ],
               onSelected: (v) {
-                if (v == 'edit') {
-                  onEdit();
-                } else {
-                  onDelete();
-                }
+                if (v == 'edit') onEdit();
+                if (v == 'delete') onDelete();
               },
             ),
           ],

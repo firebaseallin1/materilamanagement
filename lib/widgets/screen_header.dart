@@ -51,6 +51,20 @@ class ScreenHeader extends StatelessWidget {
                 ],
               ),
             ),
+
+            // Flexible(
+            //   child: isWide
+            //       ? Row(
+            //           mainAxisSize: MainAxisSize.min,
+            //           children: _buildActions(context, auth, isWide),
+            //         )
+            //       : Wrap(
+            //           alignment: WrapAlignment.end,
+            //           spacing: 6,
+            //           runSpacing: 6,
+            //           children: _buildActions(context, auth, isWide),
+            //         ),
+            // ),
             if (isWide)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -82,8 +96,7 @@ class ScreenHeader extends StatelessWidget {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide:
-                                BorderSide(color: Colors.grey.shade300),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
                           ),
                         ),
                       ),
@@ -150,6 +163,62 @@ class ScreenHeader extends StatelessWidget {
       );
     });
   }
+
+  List<Widget> _buildActions(BuildContext context, AuthService auth, iswide) {
+    return [
+      if (onSearchChanged != null)
+        SizedBox(
+          width: 180,
+          height: 36,
+          child: TextField(
+            onChanged: onSearchChanged,
+            decoration: InputDecoration(
+              hintText: searchHint ?? 'Search...',
+              prefixIcon: const Icon(Icons.search, size: 18),
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+      if (onAdd != null)
+        _AddButton(
+          label: addLabel ?? 'Add',
+          onTap: onAdd!,
+        ),
+      _HeaderIconBtn(
+        icon: Icons.mail_outline_rounded,
+        onTap: () {},
+      ),
+      _HeaderIconBtn(
+        icon: Icons.notifications_none_rounded,
+        onTap: () {},
+      ),
+      _HeaderIconBtn(
+        icon: onRefresh != null ? Icons.refresh_rounded : Icons.menu_rounded,
+        onTap: onRefresh ?? () {},
+      ),
+      // PopupMenuButton<String>(
+      //   child: CircleAvatar(
+      //     radius: 17,
+      //     backgroundColor: const Color(0xFF2E7D52),
+      //     child: Text(_initials(auth.userName)),
+      //   ),
+      //   itemBuilder: (_) => [
+      //     const PopupMenuItem(
+      //       value: 'logout',
+      //       child: Text('Logout'),
+      //     ),
+      //   ],
+      //   onSelected: (v) {
+      //     if (v == 'logout') auth.logout();
+      //   },
+      // ),
+    ];
+  }
 }
 
 class _AddButton extends StatelessWidget {
@@ -164,7 +233,8 @@ class _AddButton extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: onTap,
         icon: const Icon(Icons.add_rounded, size: 16),
-        label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        label: Text(label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2E7D52),
           foregroundColor: Colors.white,

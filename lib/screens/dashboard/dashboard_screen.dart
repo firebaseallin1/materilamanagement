@@ -174,6 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       case 6: return const LocationScreen();
       case 7: return const MaterialScreen();
       case 8: return const UserScreen();
+      case 11: return const CategoryScreen();
       case 9: return const ReportsScreen();
       case 10: return const BranchScreen();
     }
@@ -421,6 +422,7 @@ class _SidebarContent extends StatelessWidget {
               _sectionLabel('MASTERS'),
               _navItem(10, Icons.store_outlined, 'Branches', null),
               _navItem(6, Icons.location_on_outlined, 'Location', null),
+              _navItem(11, Icons.category_outlined, 'Category', null),
               _navItem(7, Icons.widgets_outlined, 'Material', null),
               if (auth.isAdmin)
                 _navItem(8, Icons.people_outline, 'Users', null),
