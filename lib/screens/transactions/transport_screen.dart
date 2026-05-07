@@ -128,7 +128,7 @@ class _TransportScreenState extends State<TransportScreen> {
           if (!isMobile) _buildTableHeader(),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const AppLoader()
                 : _filtered.isEmpty
                     ? const EmptyState(message: 'No matching records', icon: Icons.local_shipping)
                     : RefreshIndicator(
@@ -508,7 +508,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: _saving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const ButtonLoader()
                   : Text(isEdit ? 'Update Transport' : 'Save Transport'),
             ),
           ),
@@ -564,7 +564,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
         label: const Text('Add Measurement'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoader()
           : _items.isEmpty
               ? const EmptyState(message: 'No measurements', icon: Icons.straighten)
               : RefreshIndicator(
@@ -745,7 +745,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
           ElevatedButton(
               onPressed: _saving ? null : _save,
               child: _saving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const ButtonLoader()
                   : const Text('Save')),
         ]),
       ),

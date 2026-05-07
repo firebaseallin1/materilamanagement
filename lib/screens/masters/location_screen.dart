@@ -159,9 +159,7 @@ class _LocationScreenState extends State<LocationScreen> {
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: _green))
+                  ? const AppLoader()
                   : rows.isEmpty
                       ? _buildEmpty()
                       : isMobile
@@ -823,11 +821,7 @@ class _LocationFormPanelState extends State<LocationFormPanel> {
                                 borderRadius: BorderRadius.circular(10)),
                           ),
                           child: _saving
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
+                              ? const ButtonLoader()
                               : Text(isNew ? 'Add Location' : 'Save Changes',
                                   style: const TextStyle(
                                       color: Colors.white,

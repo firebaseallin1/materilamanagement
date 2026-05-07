@@ -166,9 +166,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: _green))
+                  ? const AppLoader()
                   : rows.isEmpty
                       ? _buildEmpty()
                       : isMobile
@@ -827,11 +825,7 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                               borderRadius: BorderRadius.circular(10)),
                         ),
                         child: _saving
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
+                            ? const ButtonLoader()
                             : Text(
                                 isNew ? 'Add Category' : 'Save Changes',
                                 style: const TextStyle(
@@ -1024,9 +1018,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: _green))
+                  ? const AppLoader()
                   : rows.isEmpty
                       ? _buildEmpty()
                       : isMobile
@@ -1713,11 +1705,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
                                 borderRadius: BorderRadius.circular(10)),
                           ),
                           child: _saving
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
+                              ? const ButtonLoader()
                               : Text(isNew ? 'Add Material' : 'Save Changes',
                                   style: const TextStyle(
                                       color: Colors.white,
@@ -1805,7 +1793,7 @@ class _UserScreenState extends State<UserScreen> {
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const AppLoader()
               : _users.isEmpty
                   ? const EmptyState(message: 'No users', icon: Icons.people)
                   : ListView.builder(
@@ -1985,11 +1973,7 @@ class _UserFormState extends State<_UserForm> {
                 child: ElevatedButton(
                     onPressed: _saving ? null : _save,
                     child: _saving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
+                        ? const ButtonLoader()
                         : const Text('Save'))),
             const SizedBox(height: 8),
           ]),

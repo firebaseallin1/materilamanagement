@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/common_widgets.dart';
 
 const _kPrimary = Color(0xFF1B3A27);
 const _kAccent = Color(0xFF2E7D52);
@@ -253,11 +254,7 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 onPressed: _loading ? null : _login,
                 child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
+                    ? const ButtonLoader()
                     : const Text('Sign In',
                         style: TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w600)),

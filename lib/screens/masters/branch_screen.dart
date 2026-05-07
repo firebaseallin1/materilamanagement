@@ -204,9 +204,7 @@ class _BranchScreenState extends State<BranchScreen> {
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: _green))
+                  ? const AppLoader()
                   : rows.isEmpty
                       ? _buildEmpty()
                       : isMobile
@@ -1137,11 +1135,7 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
                               borderRadius: BorderRadius.circular(10)),
                         ),
                         child: _saving
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
+                            ? const ButtonLoader()
                             : Text(isNew ? 'Add Branch' : 'Save Changes',
                                 style: const TextStyle(
                                     color: Colors.white,

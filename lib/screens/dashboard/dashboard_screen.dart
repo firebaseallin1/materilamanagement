@@ -16,6 +16,7 @@ import '../masters/category_screen.dart';
 import '../masters/material_screen.dart';
 import '../masters/user_screen.dart';
 import '../reports/reports_screen.dart';
+import '../../widgets/common_widgets.dart';
 
 const _kSidebar = Color(0xFF1B3A27);
 const _kSidebarActive = Color(0xFF2E7D52);
@@ -180,14 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
 
     if (_loading) {
-      return const Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          CircularProgressIndicator(color: _kSidebarActive),
-          SizedBox(height: 14),
-          Text('Loading dashboard…',
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
-        ]),
-      );
+      return const AppLoader(message: 'Loading dashboard…');
     }
 
     final counts = _summary?['counts'] ?? {};

@@ -131,7 +131,7 @@ class _TotalStockTabState extends State<_TotalStockTab> {
                 .contains(q))
             .toList();
 
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const AppLoader();
     if (filtered.isEmpty) {
       return const EmptyState(
           message: 'No stock data', icon: Icons.inventory_2_outlined);
@@ -153,99 +153,292 @@ class _TotalStockTabState extends State<_TotalStockTab> {
   }
 
   Widget _buildDesktopTable(List filtered) {
-    const hdr = TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
+    const hdrStyle = TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF94A3B8),
+        letterSpacing: 0.7);
+
+    Widget colHdr(String label, Color dot) => SizedBox(
+          width: 108,
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+            const SizedBox(width: 5),
+            Text(label, style: hdrStyle),
+          ]),
+        );
+
+    Widget chip(String val, Color fg, Color bg) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+          decoration:
+              BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+          child: Text(val,
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
+        );
+
     return Column(children: [
+      // ── Header ──────────────────────────────────────────────────────────────
       Container(
-        color: const Color(0xFFF9FAFB),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: const Row(children: [
-          SizedBox(width: 40, child: Text('#', style: hdr)),
-          Expanded(flex: 3, child: Text('MATERIAL', style: hdr)),
-          SizedBox(width: 60, child: Text('CODE', style: hdr)),
-          SizedBox(width: 50, child: Text('UNIT', style: hdr)),
-          SizedBox(width: 80, child: Text('STORED', style: hdr, textAlign: TextAlign.right)),
-          SizedBox(width: 80, child: Text('MOVED', style: hdr, textAlign: TextAlign.right)),
-          SizedBox(width: 95, child: Text('BALANCE', style: hdr, textAlign: TextAlign.right)),
-          Expanded(flex: 2, child: Text('UTILIZED', style: hdr)),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          border:
+              Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 11, 24, 11),
+        child: Row(children: [
+          const SizedBox(width: 32, child: Text('#', style: hdrStyle)),
+          const Expanded(flex: 4, child: Text('MATERIAL', style: hdrStyle)),
+          colHdr('STORED', const Color(0xFF059669)),
+          colHdr('MOVED', const Color(0xFF7C3AED)),
+          colHdr('BALANCE', const Color(0xFF2563EB)),
+          const Expanded(
+              flex: 2,
+              child: Padding(
+                padding: EdgeInsets.only(left: 20),
+                child: Text('UTILIZED', style: hdrStyle),
+              )),
         ]),
       ),
-      Expanded(child: ListView.builder(
-        itemCount: filtered.length,
-        itemBuilder: (_, i) {
-          final item     = filtered[i];
-          final name     = (item['material']?['name'] ?? '—') as String;
-          final code     = (item['material']?['code'] ?? '—') as String;
-          final unit     = (item['material']?['unit'] ?? 'pcs') as String;
-          final balance  = (item['balance']  as num? ?? 0).toDouble();
-          final stored   = (item['stored']   as num? ?? 0).toDouble();
-          final moved    = (item['moved']    as num? ?? 0).toDouble();
-          final totalIn  = (item['totalIn']  as num? ?? 0).toDouble();
-          final totalOut = (item['totalOut'] as num? ?? 0).toDouble();
-          final ratio    = totalIn > 0 ? (totalOut / totalIn).clamp(0.0, 1.0) : 0.0;
-          final lowStock = balance >= 0 && ratio > 0.85;
-          return InkWell(
-            hoverColor: const Color(0xFFF0FDF4),
-            child: Container(
+
+      // ── Rows ────────────────────────────────────────────────────────────────
+      Expanded(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          itemCount: filtered.length,
+          itemBuilder: (_, i) {
+            final item = filtered[i];
+            final name = (item['material']?['name'] ?? '—') as String;
+            final code = (item['material']?['code'] ?? '—') as String;
+            final unit = (item['material']?['unit'] ?? 'pcs') as String;
+            final balance = (item['balance'] as num? ?? 0).toDouble();
+            final stored = (item['stored'] as num? ?? 0).toDouble();
+            final moved = (item['moved'] as num? ?? 0).toDouble();
+            final ratio = stored > 0 ? (moved / stored).clamp(0.0, 1.0) : 0.0;
+            final lowStock = balance >= 0 && ratio > 0.85;
+
+            final statusColor = ratio > 0.85
+                ? const Color(0xFFEF4444)
+                : ratio > 0.55
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFF10B981);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
-                border: const Border(bottom: BorderSide(color: Color(0xFFF3F4F6))),
-                color: lowStock ? const Color(0xFFFFF8F8) : Colors.white,
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 5,
+                      offset: const Offset(0, 1))
+                ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-              child: Row(children: [
-                SizedBox(width: 40, child: Text('${i + 1}', style: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
-                Expanded(flex: 3, child: Row(children: [
-                  Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(7)),
-                    child: Icon(_matIcon(name), size: 15, color: const Color(0xFF2E7D52)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF111827)), overflow: TextOverflow.ellipsis)),
-                ])),
-                SizedBox(width: 60, child: Text(code, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)))),
-                SizedBox(width: 50, child: Text(unit, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)))),
-                SizedBox(width: 80, child: Text('+${_fmt(stored)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF2E7D32)), textAlign: TextAlign.right)),
-                SizedBox(width: 80, child: Text(_fmt(moved), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF6A1B9A)), textAlign: TextAlign.right)),
-                SizedBox(width: 95, child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: balance > 0 ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(_fmt(balance), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: balance > 0 ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F))),
-                  ),
-                )),
-                Expanded(flex: 2, child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: LinearProgressIndicator(
-                        value: ratio,
-                        minHeight: 5,
-                        backgroundColor: const Color(0xFFE8F5E9),
-                        valueColor: AlwaysStoppedAnimation<Color>(ratio > 0.85 ? const Color(0xFFD32F2F) : const Color(0xFF2E7D32)),
+              child: IntrinsicHeight(
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Status strip
+                      Container(
+                        width: 4,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              bottomLeft: Radius.circular(12)),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(children: [
-                      Text('${(ratio * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E))),
-                      if (lowStock) ...[
-                        const SizedBox(width: 4),
-                        const Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFD32F2F)),
-                        const SizedBox(width: 2),
-                        const Text('Low', style: TextStyle(fontSize: 10, color: Color(0xFFD32F2F))),
-                      ],
+                      // Content
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 12),
+                          child: Row(children: [
+                            // Index
+                            SizedBox(
+                              width: 28,
+                              child: Text('${i + 1}',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFFCBD5E1))),
+                            ),
+                            // Material info
+                            Expanded(
+                                flex: 4,
+                                child: Row(children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                          color: statusColor.withValues(
+                                              alpha: 0.2)),
+                                    ),
+                                    child: Icon(_matIcon(name),
+                                        size: 18, color: statusColor),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                      child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(name,
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF1E293B)),
+                                          overflow: TextOverflow.ellipsis),
+                                      const SizedBox(height: 2),
+                                      Text('$code · $unit',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF94A3B8))),
+                                    ],
+                                  )),
+                                ])),
+                            // STORED chip
+                            SizedBox(
+                                width: 108,
+                                child: Center(
+                                    child: chip(
+                                        '+${_fmt(stored)}',
+                                        const Color(0xFF059669),
+                                        const Color(0xFFECFDF5)))),
+                            // MOVED chip
+                            SizedBox(
+                              width: 108,
+                              child: Center(
+                                child: moved > 0
+                                    ? chip(_fmt(moved), const Color(0xFF7C3AED),
+                                        const Color(0xFFF5F3FF))
+                                    : const Text('—',
+                                        style: TextStyle(
+                                            fontSize: 16,
+                                            color: Color(0xFFCBD5E1))),
+                              ),
+                            ),
+                            // BALANCE badge
+                            SizedBox(
+                              width: 108,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: balance > 0
+                                        ? const Color(0xFF2563EB)
+                                        : const Color(0xFFEF4444),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: (balance > 0
+                                                ? const Color(0xFF2563EB)
+                                                : const Color(0xFFEF4444))
+                                            .withValues(alpha: 0.25),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      )
+                                    ],
+                                  ),
+                                  child: Text(
+                                    '${_fmt(balance)} $unit',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // UTILIZED bar
+                            Expanded(
+                                flex: 2,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            '${(ratio * 100).toStringAsFixed(0)}%',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: statusColor),
+                                          ),
+                                          if (lowStock)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                              decoration: BoxDecoration(
+                                                  color:
+                                                      const Color(0xFFFEF2F2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(5)),
+                                              child: const Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                        Icons
+                                                            .warning_amber_rounded,
+                                                        size: 10,
+                                                        color:
+                                                            Color(0xFFEF4444)),
+                                                    SizedBox(width: 3),
+                                                    Text('Low',
+                                                        style: TextStyle(
+                                                            fontSize: 9,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: Color(
+                                                                0xFFEF4444))),
+                                                  ]),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: LinearProgressIndicator(
+                                          value: ratio,
+                                          minHeight: 7,
+                                          backgroundColor:
+                                              const Color(0xFFF1F5F9),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  statusColor),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                          ]),
+                        ),
+                      ),
                     ]),
-                  ]),
-                )),
-              ]),
-            ),
-          );
-        },
-      )),
+              ),
+            );
+          },
+        ),
+      ),
     ]);
   }
 }
@@ -260,11 +453,9 @@ class _TotalStockCard extends StatelessWidget {
     final code = (item['material']?['code'] ?? '') as String;
     final unit = (item['material']?['unit'] ?? 'pcs') as String;
     final balance = (item['balance'] as num? ?? 0).toDouble();
-    final stored  = (item['stored']  as num? ?? 0).toDouble();
-    final moved   = (item['moved']   as num? ?? 0).toDouble();
-    final totalIn = (item['totalIn'] as num? ?? 0).toDouble();
-    final totalOut= (item['totalOut']as num? ?? 0).toDouble();
-    final ratio = totalIn > 0 ? (totalOut / totalIn).clamp(0.0, 1.0) : 0.0;
+    final stored = (item['stored'] as num? ?? 0).toDouble();
+    final moved = (item['moved'] as num? ?? 0).toDouble();
+    final ratio = stored > 0 ? (moved / stored).clamp(0.0, 1.0) : 0.0;
     final lowStock = balance >= 0 && ratio > 0.85;
 
     return Container(
@@ -273,9 +464,8 @@ class _TotalStockCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: lowStock
-                ? const Color(0xFFFFCDD2)
-                : const Color(0xFFEEEEEE)),
+            color:
+                lowStock ? const Color(0xFFFFCDD2) : const Color(0xFFEEEEEE)),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -323,8 +513,8 @@ class _TotalStockCard extends StatelessWidget {
                 ),
                 // Balance badge
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: balance > 0
                         ? const Color(0xFFE8F5E9)
@@ -391,8 +581,8 @@ class _TotalStockCard extends StatelessWidget {
               children: [
                 Text(
                   '${(ratio * 100).toStringAsFixed(0)}% utilized',
-                  style: const TextStyle(
-                      fontSize: 10, color: Color(0xFF9E9E9E)),
+                  style:
+                      const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E)),
                 ),
                 if (lowStock) ...[
                   const SizedBox(width: 8),
@@ -400,8 +590,7 @@ class _TotalStockCard extends StatelessWidget {
                       size: 12, color: Color(0xFFD32F2F)),
                   const SizedBox(width: 2),
                   const Text('Low stock',
-                      style: TextStyle(
-                          fontSize: 10, color: Color(0xFFD32F2F))),
+                      style: TextStyle(fontSize: 10, color: Color(0xFFD32F2F))),
                 ],
               ],
             ),
@@ -450,14 +639,11 @@ class _StatPill extends StatelessWidget {
             Text(
               _fmt(value),
               style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: color),
+                  fontWeight: FontWeight.w700, fontSize: 14, color: color),
             ),
             const SizedBox(height: 1),
             Text(label,
-                style: const TextStyle(
-                    fontSize: 9, color: Color(0xFF757575))),
+                style: const TextStyle(fontSize: 9, color: Color(0xFF757575))),
           ],
         ),
       ),
@@ -514,11 +700,10 @@ class _WarehouseTabState extends State<_WarehouseTab> {
                     .contains(q));
           }).toList();
 
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const AppLoader();
     if (filtered.isEmpty) {
       return const EmptyState(
-          message: 'No warehouse data',
-          icon: Icons.warehouse_outlined);
+          message: 'No warehouse data', icon: Icons.warehouse_outlined);
     }
 
     return LayoutBuilder(builder: (_, constraints) {
@@ -554,188 +739,245 @@ class _WarehouseCardState extends State<_WarehouseCard> {
   Widget build(BuildContext context) {
     final branchName = (widget.data['branch']?['name'] ?? '—') as String;
     final materials = (widget.data['materials'] as List? ?? []);
-    final totalIn = (widget.data['totalIn'] as num? ?? 0).toDouble();
-    final totalOut = (widget.data['totalOut'] as num? ?? 0).toDouble();
+    final totalStored = (widget.data['totalStored'] as num? ?? 0).toDouble();
+    final totalMoveIn = (widget.data['totalMoveIn'] as num? ?? 0).toDouble();
+    final totalMoveOut = (widget.data['totalMoveOut'] as num? ?? 0).toDouble();
     final totalBalance = (widget.data['totalBalance'] as num? ?? 0).toDouble();
+    final hasStore = totalStored > 0;
 
     const colLabel = TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w700,
-      color: Color(0xFF9E9E9E),
-      letterSpacing: 0.8,
-    );
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF9E9E9E),
+        letterSpacing: 0.8);
+
+    Widget balBadge(double v, {double fontSize = 13}) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: v > 0 ? const Color(0xFF2563EB) : const Color(0xFFEF4444),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                  color: (v > 0
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFFEF4444))
+                      .withValues(alpha: 0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2))
+            ],
+          ),
+          child: Text(_fmt(v),
+              style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+        );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+              blurRadius: 10,
+              offset: const Offset(0, 2))
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          // ── Branch header ──────────────────────────────────────────────────
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
-                      borderRadius: BorderRadius.circular(10),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Row(children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1565C0), Color(0xFF1E88E5)],
                     ),
-                    child: const Icon(Icons.warehouse_outlined,
-                        size: 22, color: Color(0xFF1565C0)),
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow: [
+                      BoxShadow(
+                          color: const Color(0xFF1565C0).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3))
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
+                  child: const Icon(Icons.warehouse_rounded,
+                      size: 22, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(branchName,
                             style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
-                                color: Color(0xFF1A1A1A))),
+                                color: Color(0xFF1E293B))),
                         Text(
                           '${materials.length} material${materials.length != 1 ? 's' : ''}',
                           style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF9E9E9E)),
+                              fontSize: 11, color: Color(0xFF94A3B8)),
                         ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        _fmt(totalBalance),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: Color(0xFF1565C0)),
-                      ),
-                      const Text('balance',
-                          style: TextStyle(
-                              fontSize: 10, color: Color(0xFF9E9E9E))),
-                    ],
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: const Color(0xFF9E9E9E),
-                    size: 22,
-                  ),
-                ],
-              ),
+                      ]),
+                ),
+                // Quick stats
+                Row(children: [
+                  if (hasStore) ...[
+                    _HeaderStat('Stored', totalStored, const Color(0xFF059669)),
+                    const SizedBox(width: 10),
+                    _HeaderStat('In', totalMoveIn, const Color(0xFF2563EB)),
+                    const SizedBox(width: 10),
+                    _HeaderStat('Out', totalMoveOut, const Color(0xFF7C3AED)),
+                    const SizedBox(width: 12),
+                  ] else ...[
+                    _HeaderStat('In', totalMoveIn, const Color(0xFF2563EB)),
+                    const SizedBox(width: 10),
+                    _HeaderStat('Out', totalMoveOut, const Color(0xFF7C3AED)),
+                    const SizedBox(width: 12),
+                  ],
+                  balBadge(totalBalance, fontSize: 12),
+                ]),
+                const SizedBox(width: 8),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: const Color(0xFF94A3B8),
+                  size: 22,
+                ),
+              ]),
             ),
           ),
+
           if (_expanded) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(children: [
-                _MiniStat('Total In', totalIn, const Color(0xFF2E7D32)),
-                const SizedBox(width: 8),
-                _MiniStat('Total Out', totalOut, const Color(0xFFF57C00)),
-              ]),
-            ),
+            // ── Column headers ───────────────────────────────────────────────
             Container(
-              color: const Color(0xFFF9FAFB),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: const Row(children: [
-                Expanded(child: Text('MATERIAL', style: colLabel)),
-                SizedBox(width: 64, child: Text('IN', style: colLabel)),
-                SizedBox(width: 64, child: Text('OUT', style: colLabel)),
-                SizedBox(width: 80, child: Text('BALANCE', style: colLabel)),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                const Expanded(child: Text('MATERIAL', style: colLabel)),
+                if (hasStore)
+                  const SizedBox(
+                      width: 72,
+                      child: Text('STORED',
+                          style: colLabel, textAlign: TextAlign.center)),
+                const SizedBox(
+                    width: 72,
+                    child: Text('IN',
+                        style: colLabel, textAlign: TextAlign.center)),
+                const SizedBox(
+                    width: 72,
+                    child: Text('OUT',
+                        style: colLabel, textAlign: TextAlign.center)),
+                const SizedBox(
+                    width: 88,
+                    child: Text('BALANCE',
+                        style: colLabel, textAlign: TextAlign.center)),
               ]),
             ),
+
+            // ── Material rows ────────────────────────────────────────────────
             ...materials.asMap().entries.map((entry) {
               final idx = entry.key;
               final m = entry.value as Map;
               final mName = (m['material']?['name'] ?? '—') as String;
               final mUnit = (m['material']?['unit'] ?? '') as String;
-              final mIn = (m['in'] as num? ?? 0).toDouble();
-              final mOut = (m['out'] as num? ?? 0).toDouble();
+              final mStore = (m['stored'] as num? ?? 0).toDouble();
+              final mIn = (m['moveIn'] as num? ?? 0).toDouble();
+              final mOut = (m['moveOut'] as num? ?? 0).toDouble();
               final mBal = (m['balance'] as num? ?? 0).toDouble();
 
-              return Column(children: [
-                if (idx > 0)
-                  Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Colors.grey.shade100),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  child: Row(children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(mName,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Color(0xFF1A1A1A))),
-                          Text(mUnit,
-                              style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF9E9E9E))),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      width: 64,
-                      child: Text('+${_fmt(mIn)}',
-                          style: const TextStyle(
-                              color: Color(0xFF2E7D32),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                    ),
-                    SizedBox(
-                      width: 64,
-                      child: Text('-${_fmt(mOut)}',
-                          style: const TextStyle(
-                              color: Color(0xFFF57C00),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                    ),
-                    SizedBox(
-                      width: 80,
+              Widget numCell(String val, Color color, {bool plus = false}) =>
+                  SizedBox(
+                    width: 72,
+                    child: Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: mBal > 0
-                              ? const Color(0xFFE8F5E9)
-                              : const Color(0xFFFFEBEE),
-                          borderRadius: BorderRadius.circular(12),
+                          color: color.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          _fmt(mBal),
+                          '${plus ? '+' : ''}$val',
                           style: TextStyle(
-                            color: mBal > 0
-                                ? const Color(0xFF2E7D32)
-                                : const Color(0xFFD32F2F),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
+                  );
+
+              return Column(children: [
+                if (idx > 0)
+                  const Divider(
+                      height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(mName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: Color(0xFF1E293B))),
+                            if (mUnit.isNotEmpty)
+                              Text(mUnit,
+                                  style: const TextStyle(
+                                      fontSize: 10, color: Color(0xFF94A3B8))),
+                          ]),
+                    ),
+                    if (hasStore)
+                      numCell(_fmt(mStore), const Color(0xFF059669),
+                          plus: true),
+                    numCell(_fmt(mIn), const Color(0xFF2563EB), plus: true),
+                    numCell(_fmt(mOut), const Color(0xFF7C3AED)),
+                    SizedBox(
+                      width: 88,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: mBal > 0
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFFEBEE),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            _fmt(mBal),
+                            style: TextStyle(
+                              color: mBal > 0
+                                  ? const Color(0xFF2E7D32)
+                                  : const Color(0xFFD32F2F),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
                   ]),
                 ),
               ]);
@@ -748,33 +990,28 @@ class _WarehouseCardState extends State<_WarehouseCard> {
   }
 }
 
-class _MiniStat extends StatelessWidget {
+class _HeaderStat extends StatelessWidget {
   final String label;
   final double value;
   final Color color;
-  const _MiniStat(this.label, this.value, this.color);
+  const _HeaderStat(this.label, this.value, this.color);
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _fmt(value),
+          style: TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 13, color: color),
         ),
-        child: Row(children: [
-          Text(_fmt(value),
-              style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: color)),
-          const SizedBox(width: 6),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: Color(0xFF757575))),
-        ]),
-      ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8)),
+        ),
+      ],
     );
   }
 }
@@ -815,8 +1052,7 @@ class _MovementsTabState extends State<_MovementsTab> {
     if (!await confirmDelete(context)) return;
     final res = await ApiService.delete('/stock/$id');
     if (mounted) {
-      showSnack(context,
-          res['success'] == true ? 'Deleted' : res['message'],
+      showSnack(context, res['success'] == true ? 'Deleted' : res['message'],
           error: res['success'] != true);
       if (res['success'] == true) _load();
     }
@@ -828,21 +1064,18 @@ class _MovementsTabState extends State<_MovementsTab> {
     final filtered = q.isEmpty
         ? _items
         : _items.where((i) {
-            final mat =
-                (i['material']?['name'] ?? '').toString().toLowerCase();
-            final b1 =
-                (i['branch']?['name'] ?? '').toString().toLowerCase();
+            final mat = (i['material']?['name'] ?? '').toString().toLowerCase();
+            final b1 = (i['branch']?['name'] ?? '').toString().toLowerCase();
             final b2 =
                 (i['fromBranch']?['name'] ?? '').toString().toLowerCase();
-            final b3 =
-                (i['toBranch']?['name'] ?? '').toString().toLowerCase();
+            final b3 = (i['toBranch']?['name'] ?? '').toString().toLowerCase();
             return mat.contains(q) ||
                 b1.contains(q) ||
                 b2.contains(q) ||
                 b3.contains(q);
           }).toList();
 
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const AppLoader();
     if (filtered.isEmpty) {
       return const EmptyState(
           message: 'No stock movements', icon: Icons.swap_vert);
@@ -859,7 +1092,8 @@ class _MovementsTabState extends State<_MovementsTab> {
                 itemCount: filtered.length,
                 itemBuilder: (_, i) => _HistoryCard(
                   item: filtered[i],
-                  onEdit: () => _openStockForm(context, item: filtered[i], onSaved: _load),
+                  onEdit: () => _openStockForm(context,
+                      item: filtered[i], onSaved: _load),
                   onDelete: () => _delete(filtered[i]['_id']),
                 ),
               )
@@ -869,7 +1103,8 @@ class _MovementsTabState extends State<_MovementsTab> {
   }
 
   Widget _buildDesktopTable(List filtered) {
-    const hdr = TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
+    const hdr = TextStyle(
+        fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
     return Column(children: [
       Container(
         color: const Color(0xFFF9FAFB),
@@ -879,63 +1114,115 @@ class _MovementsTabState extends State<_MovementsTab> {
           SizedBox(width: 100, child: Text('TYPE', style: hdr)),
           Expanded(flex: 2, child: Text('MATERIAL', style: hdr)),
           Expanded(flex: 3, child: Text('BRANCH / ROUTE', style: hdr)),
-          SizedBox(width: 90, child: Text('QUANTITY', style: hdr, textAlign: TextAlign.right)),
+          SizedBox(
+              width: 90,
+              child: Text('QUANTITY', style: hdr, textAlign: TextAlign.right)),
           Expanded(flex: 2, child: Text('DATE', style: hdr)),
           SizedBox(width: 48),
         ]),
       ),
-      Expanded(child: ListView.builder(
+      Expanded(
+          child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: filtered.length,
         itemBuilder: (_, i) {
-          final item    = filtered[i];
-          final txType  = item['transactionType'] as String? ?? '';
+          final item = filtered[i];
+          final txType = item['transactionType'] as String? ?? '';
           final ledType = item['type'] as String? ?? 'in';
           final matName = (item['material']?['name'] ?? '—') as String;
           final matUnit = (item['material']?['unit'] ?? '') as String;
-          final qty     = (item['quantity'] as num? ?? 0).toDouble();
-          final isMove  = txType == 'stock_move';
-          final from    = (item['fromBranch']?['name'] ?? '') as String;
-          final to      = (item['toBranch']?['name']   ?? '') as String;
-          final branch  = (item['branch']?['name']     ?? '—') as String;
+          final qty = (item['quantity'] as num? ?? 0).toDouble();
+          final isMove = txType == 'stock_move';
+          final from = (item['fromBranch']?['name'] ?? '') as String;
+          final to = (item['toBranch']?['name'] ?? '') as String;
+          final branch = (item['branch']?['name'] ?? '—') as String;
           final branchLine = isMove ? '$from  →  $to' : branch;
           final cfg = _txConfig(txType, ledType);
           return InkWell(
             onTap: () => _openStockForm(context, item: item, onSaved: _load),
             hoverColor: const Color(0xFFF0FDF4),
             child: Container(
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
+              decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
               child: Row(children: [
-                SizedBox(width: 40, child: Text('${i + 1}', style: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
-                SizedBox(width: 100, child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: cfg.labelBg, borderRadius: BorderRadius.circular(10)),
-                  child: Text(cfg.label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cfg.labelColor), overflow: TextOverflow.ellipsis),
-                )),
-                Expanded(flex: 2, child: Text(matName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)), overflow: TextOverflow.ellipsis)),
-                Expanded(flex: 3, child: Text(branchLine, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)), overflow: TextOverflow.ellipsis)),
-                SizedBox(width: 90, child: Text('${cfg.qtyPrefix}${_fmt(qty)} $matUnit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cfg.badgeColor), textAlign: TextAlign.right)),
-                Expanded(flex: 2, child: Text(_fmtDate(item['date'] as String?), style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)))),
+                SizedBox(
+                    width: 40,
+                    child: Text('${i + 1}',
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF9CA3AF)))),
+                SizedBox(
+                    width: 100,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: cfg.labelBg,
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(cfg.label,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: cfg.labelColor),
+                          overflow: TextOverflow.ellipsis),
+                    )),
+                Expanded(
+                    flex: 2,
+                    child: Text(matName,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF111827)),
+                        overflow: TextOverflow.ellipsis)),
+                Expanded(
+                    flex: 3,
+                    child: Text(branchLine,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF6B7280)),
+                        overflow: TextOverflow.ellipsis)),
+                SizedBox(
+                    width: 90,
+                    child: Text('${cfg.qtyPrefix}${_fmt(qty)} $matUnit',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: cfg.badgeColor),
+                        textAlign: TextAlign.right)),
+                Expanded(
+                    flex: 2,
+                    child: Text(_fmtDate(item['date'] as String?),
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF6B7280)))),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF9CA3AF)),
+                  icon: const Icon(Icons.more_horiz_rounded,
+                      size: 18, color: Color(0xFF9CA3AF)),
                   padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                   elevation: 3,
                   itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Row(children: [
-                      Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
-                      SizedBox(width: 8),
-                      Text('Edit', style: TextStyle(fontSize: 13)),
-                    ])),
-                    PopupMenuItem(value: 'delete', child: Row(children: [
-                      Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFDC2626)),
-                      SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-                    ])),
+                    PopupMenuItem(
+                        value: 'edit',
+                        child: Row(children: [
+                          Icon(Icons.edit_outlined,
+                              size: 15, color: Color(0xFF374151)),
+                          SizedBox(width: 8),
+                          Text('Edit', style: TextStyle(fontSize: 13)),
+                        ])),
+                    PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [
+                          Icon(Icons.delete_outline_rounded,
+                              size: 15, color: Color(0xFFDC2626)),
+                          SizedBox(width: 8),
+                          Text('Delete',
+                              style: TextStyle(
+                                  fontSize: 13, color: Color(0xFFDC2626))),
+                        ])),
                   ],
                   onSelected: (v) {
-                    if (v == 'edit') _openStockForm(context, item: item, onSaved: _load);
+                    if (v == 'edit')
+                      _openStockForm(context, item: item, onSaved: _load);
                     if (v == 'delete') _delete(item['_id']);
                   },
                 ),
@@ -955,42 +1242,40 @@ class _HistoryCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   const _HistoryCard(
-      {required this.item,
-      required this.onEdit,
-      required this.onDelete});
+      {required this.item, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final txType     = item['transactionType'] as String? ?? '';
-    final ledgerType = item['type']            as String? ?? 'in';
-    final matName    = (item['material']?['name'] ?? '—') as String;
-    final matUnit    = (item['material']?['unit'] ?? '')  as String;
-    final qty        = (item['quantity'] as num? ?? 0).toDouble();
-    final remarks    = (item['remarks'] ?? '') as String;
-    final dateStr    = item['date'] as String?;
+    final txType = item['transactionType'] as String? ?? '';
+    final ledgerType = item['type'] as String? ?? 'in';
+    final matName = (item['material']?['name'] ?? '—') as String;
+    final matUnit = (item['material']?['unit'] ?? '') as String;
+    final qty = (item['quantity'] as num? ?? 0).toDouble();
+    final remarks = (item['remarks'] ?? '') as String;
+    final dateStr = item['date'] as String?;
 
-    final isMove  = txType == 'stock_move';
-    final cfg     = _txConfig(txType, ledgerType);
+    final isMove = txType == 'stock_move';
+    final cfg = _txConfig(txType, ledgerType);
 
-    final fromBranch    = (item['fromBranch']?['name']   ?? '') as String;
-    final toBranch      = (item['toBranch']?['name']     ?? '') as String;
-    final branch        = (item['branch']?['name']       ?? '—') as String;
-    final branchLine    = isMove ? '$fromBranch  →  $toBranch' : branch;
+    final fromBranch = (item['fromBranch']?['name'] ?? '') as String;
+    final toBranch = (item['toBranch']?['name'] ?? '') as String;
+    final branch = (item['branch']?['name'] ?? '—') as String;
+    final branchLine = isMove ? '$fromBranch  →  $toBranch' : branch;
 
-    final vehicleName   = (item['vehicleName']   ?? '') as String;
-    final driverName    = (item['driverName']    ?? '') as String;
+    final vehicleName = (item['vehicleName'] ?? '') as String;
+    final driverName = (item['driverName'] ?? '') as String;
     final transportName = (item['transportName'] ?? '') as String;
-    final distance      = item['distance'] as num?;
-    final cost          = item['cost']     as num?;
+    final distance = item['distance'] as num?;
+    final cost = item['cost'] as num?;
 
     final transportLine = [
       if (transportName.isNotEmpty) transportName,
-      if (vehicleName.isNotEmpty)   vehicleName,
-      if (driverName.isNotEmpty)    driverName,
+      if (vehicleName.isNotEmpty) vehicleName,
+      if (driverName.isNotEmpty) driverName,
     ].join(' · ');
     final distCost = [
       if (distance != null) '${distance}km',
-      if (cost != null)     '₹$cost',
+      if (cost != null) '₹$cost',
     ].join(' · ');
 
     return Container(
@@ -1123,8 +1408,8 @@ class _HistoryCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     _fmtDate(dateStr),
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF9E9E9E)),
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E)),
                   ),
                 ],
               ),
@@ -1154,8 +1439,8 @@ class _HistoryCard extends StatelessWidget {
                         size: 15, color: Color(0xFFDC2626)),
                     SizedBox(width: 8),
                     Text('Delete',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFFDC2626))),
+                        style:
+                            TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
                   ]),
                 ),
               ],
@@ -1262,16 +1547,23 @@ String _fmtDate(String? d) {
 
 IconData _matIcon(String name) {
   final n = name.toLowerCase();
-  if (n.contains('steel') || n.contains('metal') || n.contains('iron') ||
-      n.contains('re-bar') || n.contains('re bar')) {
+  if (n.contains('steel') ||
+      n.contains('metal') ||
+      n.contains('iron') ||
+      n.contains('re-bar') ||
+      n.contains('re bar')) {
     return Icons.grid_4x4;
   }
-  if (n.contains('wood') || n.contains('lumber') || n.contains('timber') ||
+  if (n.contains('wood') ||
+      n.contains('lumber') ||
+      n.contains('timber') ||
       n.contains('ply')) {
     return Icons.layers_outlined;
   }
-  if (n.contains('cement') || n.contains('concrete') ||
-      n.contains('mortar') || n.contains('sand')) {
+  if (n.contains('cement') ||
+      n.contains('concrete') ||
+      n.contains('mortar') ||
+      n.contains('sand')) {
     return Icons.blur_on;
   }
   if (n.contains('pipe') || n.contains('pvc') || n.contains('tube')) {
@@ -1305,8 +1597,7 @@ void _openStockForm(BuildContext context,
       alignment: Alignment.centerRight,
       child: Material(
         elevation: 16,
-        borderRadius:
-            const BorderRadius.horizontal(left: Radius.circular(20)),
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
         child: SizedBox(
           width: panelWidth,
           height: MediaQuery.of(ctx).size.height,
@@ -1315,9 +1606,8 @@ void _openStockForm(BuildContext context,
       ),
     ),
     transitionBuilder: (_, a, __, child) => SlideTransition(
-      position: Tween<Offset>(
-              begin: const Offset(1, 0), end: Offset.zero)
-          .animate(a),
+      position:
+          Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(a),
       child: child,
     ),
   );
@@ -1340,7 +1630,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
 
   // Transaction type: 'store' | 'stock_move'
   String _txType = 'store';
-  bool _isEditingMove = false; // lock branches/material when editing a stock_move
+  bool _isEditingMove =
+      false; // lock branches/material when editing a stock_move
 
   // STORE STOCK
   String? _branchId;
@@ -1351,13 +1642,13 @@ class _StockFormPanelState extends State<StockFormPanel> {
 
   // Common
   String? _materialId;
-  final _qtyCtrl           = TextEditingController();
-  final _remarksCtrl       = TextEditingController();
+  final _qtyCtrl = TextEditingController();
+  final _remarksCtrl = TextEditingController();
   final _transportNameCtrl = TextEditingController();
-  final _driverNameCtrl    = TextEditingController();
-  final _vehicleNameCtrl   = TextEditingController();
-  final _distanceCtrl      = TextEditingController();
-  final _costCtrl          = TextEditingController();
+  final _driverNameCtrl = TextEditingController();
+  final _vehicleNameCtrl = TextEditingController();
+  final _distanceCtrl = TextEditingController();
+  final _costCtrl = TextEditingController();
   DateTime _date = DateTime.now();
 
   bool _saving = false, _loadingData = true;
@@ -1375,8 +1666,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
       final e = widget.item!;
       final tt = (e['transactionType'] as String?) ?? 'store';
       _txType = tt == 'stock_move' ? 'stock_move' : 'store';
-      _materialId       = e['material']?['_id'] as String?;
-      _qtyCtrl.text     = '${e['quantity'] ?? ''}';
+      _materialId = e['material']?['_id'] as String?;
+      _qtyCtrl.text = '${e['quantity'] ?? ''}';
       _remarksCtrl.text = (e['remarks'] ?? '') as String;
       if (e['date'] != null) {
         _date = DateTime.tryParse(e['date'].toString()) ?? DateTime.now();
@@ -1384,14 +1675,14 @@ class _StockFormPanelState extends State<StockFormPanel> {
       if (_txType == 'store') {
         _branchId = e['branch']?['_id'] as String?;
       } else {
-        _isEditingMove        = true;
-        _fromBranchId         = e['fromBranch']?['_id'] as String?;
-        _toBranchId           = e['toBranch']?['_id']   as String?;
+        _isEditingMove = true;
+        _fromBranchId = e['fromBranch']?['_id'] as String?;
+        _toBranchId = e['toBranch']?['_id'] as String?;
         _transportNameCtrl.text = (e['transportName'] ?? '') as String;
-        _driverNameCtrl.text    = (e['driverName']    ?? '') as String;
-        _vehicleNameCtrl.text   = (e['vehicleName']   ?? '') as String;
-        _distanceCtrl.text      = e['distance'] != null ? '${e['distance']}' : '';
-        _costCtrl.text          = e['cost']     != null ? '${e['cost']}'     : '';
+        _driverNameCtrl.text = (e['driverName'] ?? '') as String;
+        _vehicleNameCtrl.text = (e['vehicleName'] ?? '') as String;
+        _distanceCtrl.text = e['distance'] != null ? '${e['distance']}' : '';
+        _costCtrl.text = e['cost'] != null ? '${e['cost']}' : '';
       }
     }
   }
@@ -1447,7 +1738,9 @@ class _StockFormPanelState extends State<StockFormPanel> {
   }
 
   Future<void> _fetchBalance() async {
-    if (_txType != 'stock_move' || _materialId == null || _fromBranchId == null) {
+    if (_txType != 'stock_move' ||
+        _materialId == null ||
+        _fromBranchId == null) {
       setState(() => _availableQty = null);
       return;
     }
@@ -1529,8 +1822,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
       labelStyle: const TextStyle(fontSize: 13, color: Colors.grey),
       filled: true,
       fillColor: const Color(0xFFF7F9F8),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: Color(0xFFDDE3E0)),
@@ -1574,8 +1866,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
         // Gradient header
         Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [_primary, Color(0xFF1E6F5C)],
@@ -1610,8 +1901,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
                       isNew
                           ? 'Choose a transaction type below'
                           : 'Update the stock entry below',
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 11),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 11),
                     ),
                   ]),
             ),
@@ -1624,8 +1915,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.close,
-                    color: Colors.white70, size: 16),
+                child: const Icon(Icons.close, color: Colors.white70, size: 16),
               ),
             ),
           ]),
@@ -1633,9 +1923,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
         // Form body
         Expanded(
           child: _loadingData
-              ? const Center(
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Color(0xFF2E7D52)))
+              ? const AppLoader()
               : SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                   child: Form(
@@ -1645,8 +1933,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
                       children: [
                         // ── Transaction type selector ──────────────────────
                         const Text('Transaction Type',
-                            style: TextStyle(
-                                fontSize: 13, color: Colors.grey)),
+                            style: TextStyle(fontSize: 13, color: Colors.grey)),
                         const SizedBox(height: 8),
                         Row(children: [
                           _TxTypeBtn(
@@ -1674,8 +1961,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
                           DropdownButtonFormField<String>(
                             key: ValueKey('branch_$_branchId'),
                             initialValue: _branchId,
-                            decoration:
-                                _dec('Branch', Icons.store_outlined),
+                            decoration: _dec('Branch', Icons.store_outlined),
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF1A1A2E)),
                             borderRadius: BorderRadius.circular(10),
@@ -1685,11 +1971,9 @@ class _StockFormPanelState extends State<StockFormPanel> {
                                         value: b['_id'] as String,
                                         child: Text(b['name'] as String)))
                                 .toList(),
-                            onChanged: (v) =>
-                                setState(() => _branchId = v),
-                            validator: (v) => v == null
-                                ? 'Please select a branch'
-                                : null,
+                            onChanged: (v) => setState(() => _branchId = v),
+                            validator: (v) =>
+                                v == null ? 'Please select a branch' : null,
                             isExpanded: true,
                           ),
                         ],
@@ -1699,8 +1983,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
                           DropdownButtonFormField<String>(
                             key: ValueKey('from_$_fromBranchId'),
                             initialValue: _fromBranchId,
-                            decoration: _dec(
-                                'From Branch', Icons.store_outlined),
+                            decoration:
+                                _dec('From Branch', Icons.store_outlined),
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF1A1A2E)),
                             borderRadius: BorderRadius.circular(10),
@@ -1725,8 +2009,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
                           DropdownButtonFormField<String>(
                             key: ValueKey('to_$_toBranchId'),
                             initialValue: _toBranchId,
-                            decoration: _dec(
-                                'To Branch', Icons.store_mall_directory_outlined),
+                            decoration: _dec('To Branch',
+                                Icons.store_mall_directory_outlined),
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF1A1A2E)),
                             borderRadius: BorderRadius.circular(10),
@@ -1793,14 +2077,12 @@ class _StockFormPanelState extends State<StockFormPanel> {
                               if (_loadingBalance)
                                 const Text('Checking available stock…',
                                     style: TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF9CA3AF)))
+                                        fontSize: 12, color: Color(0xFF9CA3AF)))
                               else if (_availableQty == null)
                                 const Text(
                                     'Select material & source branch to see stock',
                                     style: TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF9CA3AF)))
+                                        fontSize: 12, color: Color(0xFF9CA3AF)))
                               else if (_availableQty! <= 0)
                                 const Text(
                                     'No stock available in source branch',
@@ -1825,7 +2107,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3E5F5),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFFCE93D8)),
+                              border:
+                                  Border.all(color: const Color(0xFFCE93D8)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1899,8 +2182,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
                         DropdownButtonFormField<String>(
                           key: ValueKey('mat_$_materialId'),
                           initialValue: _materialId,
-                          decoration:
-                              _dec('Material', Icons.widgets_outlined),
+                          decoration: _dec('Material', Icons.widgets_outlined),
                           style: const TextStyle(
                               fontSize: 13, color: Color(0xFF1A1A2E)),
                           borderRadius: BorderRadius.circular(10),
@@ -1926,8 +2208,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
                         TextFormField(
                           controller: _qtyCtrl,
                           keyboardType: TextInputType.number,
-                          decoration: _dec('Quantity',
-                              Icons.numbers_rounded,
+                          decoration: _dec('Quantity', Icons.numbers_rounded,
                               hint: 'e.g. 100'),
                           onChanged: (_) {
                             if (_txType == 'stock_move') {
@@ -1973,8 +2254,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFF7F9F8),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: const Color(0xFFDDE3E0)),
+                              border:
+                                  Border.all(color: const Color(0xFFDDE3E0)),
                             ),
                             child: Row(children: [
                               const Icon(Icons.calendar_today_outlined,
@@ -1982,13 +2263,11 @@ class _StockFormPanelState extends State<StockFormPanel> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text('Date',
                                         style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey)),
+                                            fontSize: 11, color: Colors.grey)),
                                     const SizedBox(height: 2),
                                     Text(
                                       '${_date.day.toString().padLeft(2, '0')} / '
@@ -2012,8 +2291,7 @@ class _StockFormPanelState extends State<StockFormPanel> {
                         TextFormField(
                           controller: _remarksCtrl,
                           maxLines: 3,
-                          decoration: _dec(
-                              'Remarks', Icons.notes_rounded,
+                          decoration: _dec('Remarks', Icons.notes_rounded,
                               hint: 'Optional notes...'),
                         ),
                         const SizedBox(height: 24),
@@ -2024,13 +2302,12 @@ class _StockFormPanelState extends State<StockFormPanel> {
                             child: OutlinedButton(
                               onPressed: () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 14),
-                                side: const BorderSide(
-                                    color: Color(0xFFDDE3E0)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                side:
+                                    const BorderSide(color: Color(0xFFDDE3E0)),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(10)),
+                                    borderRadius: BorderRadius.circular(10)),
                               ),
                               child: const Text('Cancel',
                                   style: TextStyle(
@@ -2045,16 +2322,11 @@ class _StockFormPanelState extends State<StockFormPanel> {
                                 gradient: _saving
                                     ? null
                                     : const LinearGradient(
-                                        colors: [
-                                          _primary,
-                                          Color(0xFF1E6F5C)
-                                        ],
+                                        colors: [_primary, Color(0xFF1E6F5C)],
                                         begin: Alignment.centerLeft,
                                         end: Alignment.centerRight,
                                       ),
-                                color: _saving
-                                    ? const Color(0xFFD1D5DB)
-                                    : null,
+                                color: _saving ? const Color(0xFFD1D5DB) : null,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: ElevatedButton(
@@ -2062,28 +2334,18 @@ class _StockFormPanelState extends State<StockFormPanel> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10)),
+                                      borderRadius: BorderRadius.circular(10)),
                                 ),
                                 child: _saving
-                                    ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2))
-                                    : Text(
-                                        isNew
-                                            ? 'Add Stock'
-                                            : 'Save Changes',
+                                    ? const ButtonLoader()
+                                    : Text(isNew ? 'Add Stock' : 'Save Changes',
                                         style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 14,
-                                            fontWeight:
-                                                FontWeight.w600)),
+                                            fontWeight: FontWeight.w600)),
                               ),
                             ),
                           ),
@@ -2125,8 +2387,7 @@ class _TxTypeBtn extends StatelessWidget {
         onTap: disabled ? null : onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding:
-              const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
           decoration: BoxDecoration(
             color: selected ? color : const Color(0xFFF7F9F8),
             borderRadius: BorderRadius.circular(10),

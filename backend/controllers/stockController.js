@@ -205,6 +205,12 @@ exports.remove = async (req, res) => {
 };
 
 // ── Total stock summary per material (all branches) ───────────────────────────
+// Logic:
+//   stored   = qty formally stored at the store-branch (via 'store' transactions)
+//   dispatched = qty moved OUT from the store-branch only
+//   returned   = qty returned back TO the store-branch via stock_move
+//   moved    = dispatched - returned  (net qty currently away from store-branch)
+//   balance  = stored - moved         (= stored - dispatched + returned)
 exports.summary = async (req, res) => {
   try {
     const mongoose = require('mongoose');
@@ -212,30 +218,42 @@ exports.summary = async (req, res) => {
     const match = {};
     if (branch) match.branch = new mongoose.Types.ObjectId(branch);
 
-    // isStore: transactionType = 'store' OR legacy record with type = 'in' (no transactionType)
     const isStore = {
       $or: [
         { $eq: ['$transactionType', 'store'] },
         { $and: [{ $eq: [{ $ifNull: ['$transactionType', null] }, null] }, { $eq: ['$type', 'in'] }] },
       ],
     };
-    // isMoveOut: stock_move deduction from source branch
-    const isMoveOut = {
-      $and: [{ $eq: ['$transactionType', 'stock_move'] }, { $eq: ['$type', 'out'] }],
-    };
+    const isMoveOut = { $and: [{ $eq: ['$transactionType', 'stock_move'] }, { $eq: ['$type', 'out'] }] };
+    const isMoveIn  = { $and: [{ $eq: ['$transactionType', 'stock_move'] }, { $eq: ['$type', 'in']  }] };
 
     const summary = await Stock.aggregate([
       { $match: match },
+      // Phase 1: per {material, branch} — identify store-branches and their move volumes
       {
         $group: {
-          _id: '$material',
-          totalIn:  { $sum: { $cond: [{ $eq: ['$type', 'in']  }, '$quantity', 0] } },
-          totalOut: { $sum: { $cond: [{ $eq: ['$type', 'out'] }, '$quantity', 0] } },
-          stored:   { $sum: { $cond: [isStore,   '$quantity', 0] } },
-          moved:    { $sum: { $cond: [isMoveOut, '$quantity', 0] } },
+          _id:        { material: '$material', branch: '$branch' },
+          storeQty:   { $sum: { $cond: [isStore,   '$quantity', 0] } },
+          moveOutQty: { $sum: { $cond: [isMoveOut, '$quantity', 0] } },
+          moveInQty:  { $sum: { $cond: [isMoveIn,  '$quantity', 0] } },
         },
       },
-      { $addFields: { balance: { $subtract: ['$totalIn', '$totalOut'] } } },
+      // Phase 2: per material — dispatched/returned only counted at store-branches
+      {
+        $group: {
+          _id:        '$_id.material',
+          stored:     { $sum: '$storeQty' },
+          dispatched: { $sum: { $cond: [{ $gt: ['$storeQty', 0] }, '$moveOutQty', 0] } },
+          returned:   { $sum: { $cond: [{ $gt: ['$storeQty', 0] }, '$moveInQty',  0] } },
+        },
+      },
+      // moved = net qty still away from store-branch; balance = what's in store
+      {
+        $addFields: {
+          moved:   { $max: [{ $subtract: ['$dispatched', '$returned'] }, 0] },
+          balance: { $subtract: [{ $add: ['$stored', '$returned'] }, '$dispatched'] },
+        },
+      },
       { $lookup: { from: 'materials', localField: '_id', foreignField: '_id', as: 'material' } },
       { $unwind: '$material' },
       { $sort: { 'material.name': 1 } },
@@ -266,6 +284,11 @@ exports.balance = async (req, res) => {
 };
 
 // ── Stock breakdown per branch ─────────────────────────────────────────────────
+// Per branch-material:
+//   stored  = formal 'store' transactions at this branch
+//   moveIn  = stock received via stock_move (from another branch)
+//   moveOut = stock dispatched via stock_move (to another branch)
+//   balance = stored + moveIn - moveOut  (physical qty at this branch)
 exports.branchWise = async (req, res) => {
   try {
     const mongoose = require('mongoose');
@@ -273,29 +296,42 @@ exports.branchWise = async (req, res) => {
     const match = {};
     if (branch) match.branch = new mongoose.Types.ObjectId(branch);
 
+    const isStore = {
+      $or: [
+        { $eq: ['$transactionType', 'store'] },
+        { $and: [{ $eq: [{ $ifNull: ['$transactionType', null] }, null] }, { $eq: ['$type', 'in'] }] },
+      ],
+    };
+    const isMoveOut = { $and: [{ $eq: ['$transactionType', 'stock_move'] }, { $eq: ['$type', 'out'] }] };
+    const isMoveIn  = { $and: [{ $eq: ['$transactionType', 'stock_move'] }, { $eq: ['$type', 'in']  }] };
+
     const data = await Stock.aggregate([
       { $match: match },
-      { $group: { _id: { branch: '$branch', material: '$material', type: '$type' }, total: { $sum: '$quantity' } } },
+      // Phase 1: per {branch, material}
       {
         $group: {
-          _id: { branch: '$_id.branch', material: '$_id.material' },
-          in:  { $sum: { $cond: [{ $eq: ['$_id.type', 'in']  }, '$total', 0] } },
-          out: { $sum: { $cond: [{ $eq: ['$_id.type', 'out'] }, '$total', 0] } },
+          _id:     { branch: '$branch', material: '$material' },
+          stored:  { $sum: { $cond: [isStore,   '$quantity', 0] } },
+          moveOut: { $sum: { $cond: [isMoveOut, '$quantity', 0] } },
+          moveIn:  { $sum: { $cond: [isMoveIn,  '$quantity', 0] } },
         },
       },
-      { $addFields: { balance: { $subtract: ['$in', '$out'] } } },
+      // balance = stored + moveIn - moveOut
+      { $addFields: { balance: { $subtract: [{ $add: ['$stored', '$moveIn'] }, '$moveOut'] } } },
       { $lookup: { from: 'materials', localField: '_id.material', foreignField: '_id', as: 'material' } },
       { $unwind: '$material' },
       { $lookup: { from: 'branches',  localField: '_id.branch',   foreignField: '_id', as: 'branch'   } },
       { $unwind: '$branch' },
+      // Phase 2: group by branch
       {
         $group: {
           _id:          '$_id.branch',
           branch:       { $first: '$branch' },
-          totalIn:      { $sum: '$in' },
-          totalOut:     { $sum: '$out' },
+          totalStored:  { $sum: '$stored' },
+          totalMoveIn:  { $sum: '$moveIn' },
+          totalMoveOut: { $sum: '$moveOut' },
           totalBalance: { $sum: '$balance' },
-          materials:    { $push: { material: '$material', in: '$in', out: '$out', balance: '$balance' } },
+          materials:    { $push: { material: '$material', stored: '$stored', moveIn: '$moveIn', moveOut: '$moveOut', balance: '$balance' } },
         },
       },
       { $sort: { 'branch.name': 1 } },

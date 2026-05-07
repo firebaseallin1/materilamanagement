@@ -168,7 +168,7 @@ class _ReportViewState extends State<_ReportView> {
       // Data list
       Expanded(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const AppLoader()
             : !_fetched
                 ? Center(
                     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [

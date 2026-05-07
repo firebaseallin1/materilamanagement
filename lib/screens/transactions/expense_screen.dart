@@ -111,7 +111,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           if (!isMobile) _buildTableHeader(),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const AppLoader()
                 : _filtered.isEmpty
                     ? const EmptyState(message: 'No expenses', icon: Icons.receipt_long)
                     : RefreshIndicator(
@@ -374,7 +374,7 @@ class _ExpenseFormPanelState extends State<ExpenseFormPanel> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: _saving
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const ButtonLoader()
                   : Text(isEdit ? 'Update Expense' : 'Save Expense'),
             ),
           ),

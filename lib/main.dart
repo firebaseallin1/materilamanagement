@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'widgets/common_widgets.dart';
 
 void main() {
   runApp(
@@ -30,10 +32,16 @@ class MMSApp extends StatelessWidget {
           secondary: const Color(0xFF03A9F4),
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1B3A27),
+        textTheme: GoogleFonts.poppinsTextTheme(),
+        appBarTheme: AppBarTheme(
+          backgroundColor: const Color(0xFF1B3A27),
           foregroundColor: Colors.white,
           elevation: 0,
+          titleTextStyle: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -80,7 +88,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     final auth = context.watch<AuthService>();
     if (auth.isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: AppLoader(message: 'Authenticating…'),
       );
     }
     return auth.isLoggedIn ? const DashboardScreen() : const LoginScreen();

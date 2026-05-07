@@ -211,3 +211,132 @@ void showSnack(BuildContext context, String msg, {bool error = false}) {
     backgroundColor: error ? Colors.red : Colors.green,
   ));
 }
+
+// ── App Loader ─────────────────────────────────────────────────────────────────
+class AppLoader extends StatefulWidget {
+  final String? message;
+  const AppLoader({super.key, this.message});
+
+  @override
+  State<AppLoader> createState() => _AppLoaderState();
+}
+
+class _AppLoaderState extends State<AppLoader> with TickerProviderStateMixin {
+  late AnimationController _dotCtrl;
+  late AnimationController _pulseCtrl;
+  late List<Animation<double>> _dotAnims;
+  late Animation<double> _pulseAnim;
+
+  static const _green = Color(0xFF2E7D52);
+  static const _greenLight = Color(0xFF43A047);
+
+  @override
+  void initState() {
+    super.initState();
+    _dotCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _dotAnims = List.generate(3, (i) => Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _dotCtrl,
+        curve: Interval(i * 0.2, i * 0.2 + 0.5, curve: Curves.easeInOut),
+      ),
+    ));
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.92, end: 1.06).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _dotCtrl.dispose();
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Pulsing brand icon
+        AnimatedBuilder(
+          animation: _pulseAnim,
+          builder: (_, __) => Transform.scale(
+            scale: _pulseAnim.value,
+            child: Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_green, _greenLight],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: _green.withValues(alpha: 0.35),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.inventory_2_rounded, color: Colors.white, size: 34),
+            ),
+          ),
+        ),
+        const SizedBox(height: 30),
+        // Bouncing dots
+        AnimatedBuilder(
+          animation: _dotCtrl,
+          builder: (_, __) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (i) {
+              final t = _dotAnims[i].value;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: Transform.translate(
+                  offset: Offset(0, -10 * t),
+                  child: Container(
+                    width: 9, height: 9,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _green.withValues(alpha: 0.35 + 0.65 * t),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        if (widget.message != null) ...[
+          const SizedBox(height: 18),
+          Text(
+            widget.message!,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: _green.withValues(alpha: 0.65),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+// ── Button Loader (inline spinner for save/submit buttons) ─────────────────────
+class ButtonLoader extends StatelessWidget {
+  final Color color;
+  const ButtonLoader({super.key, this.color = Colors.white});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 18, height: 18,
+      child: CircularProgressIndicator(
+        color: color,
+        strokeWidth: 2.5,
+        strokeCap: StrokeCap.round,
+      ),
+    );
+  }
+}

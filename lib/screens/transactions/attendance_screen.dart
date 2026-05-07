@@ -17,7 +17,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   final _searchCtrl = TextEditingController();
 
   static const _primary = Color(0xFF111827);
-  static const _green = Color(0xFF16A34A);
 
   @override
   void initState() { super.initState(); _load(); }
@@ -109,7 +108,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _green))
+                  ? const AppLoader()
                   : rows.isEmpty
                       ? const EmptyState(message: 'No attendance records', icon: Icons.how_to_reg)
                       : isMobile
@@ -536,7 +535,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: _saving
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const ButtonLoader()
                         : Text(isNew ? 'Mark Attendance' : 'Save Changes',
                             style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
