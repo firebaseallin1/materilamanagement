@@ -1031,6 +1031,14 @@ class _MovementsTabState extends State<_MovementsTab> {
   List _items = [];
   bool _loading = true;
 
+  // Filters
+  String? _selMaterial;
+  String? _selRoute;
+  String? _selTransport;
+  String? _selType; // null=all | 'store' | 'stock_move' | 'out' | 'in'
+  DateTime? _fromDate;
+  DateTime? _toDate;
+
   @override
   void initState() {
     super.initState();
@@ -1058,184 +1066,729 @@ class _MovementsTabState extends State<_MovementsTab> {
     }
   }
 
+  void _clearFilters() => setState(() {
+        _selMaterial = null;
+        _selRoute = null;
+        _selTransport = null;
+        _selType = null;
+        _fromDate = null;
+        _toDate = null;
+      });
+
+  int get _activeFilterCount => [
+        _selMaterial,
+        _selRoute,
+        _selTransport,
+        _selType,
+        _fromDate,
+        _toDate,
+      ].where((e) => e != null).length;
+
+  List<Map> get _filtered {
+    final q = widget.search.toLowerCase();
+    return _items.where((item) {
+      final mat = (item['material']?['name'] ?? '').toString().toLowerCase();
+      final branch = (item['branch']?['name'] ?? '').toString().toLowerCase();
+      final from = (item['fromBranch']?['name'] ?? '').toString();
+      final to = (item['toBranch']?['name'] ?? '').toString();
+      final txType = (item['transactionType'] ?? '').toString();
+      final ledType = (item['type'] ?? 'in').toString();
+      final transport = (item['transportName'] ?? '').toString().toLowerCase();
+      final routeLabel =
+          from.isNotEmpty || to.isNotEmpty ? '$from → $to' : branch;
+      final raw = DateTime.tryParse(item['date']?.toString() ?? '');
+      final itemDate = raw != null
+          ? DateTime(raw.toLocal().year, raw.toLocal().month, raw.toLocal().day)
+          : null;
+
+      final matchesSearch = q.isEmpty ||
+          mat.contains(q) ||
+          routeLabel.toLowerCase().contains(q) ||
+          transport.contains(q);
+
+      final matchesMaterial =
+          _selMaterial == null || mat == _selMaterial!.toLowerCase();
+
+      final matchesRoute = _selRoute == null ||
+          routeLabel.toLowerCase() == _selRoute!.toLowerCase();
+
+      final matchesTransport = _selTransport == null ||
+          transport.contains(_selTransport!.toLowerCase());
+
+      final matchesType = _selType == null ||
+          (_selType == 'store' && txType == 'store') ||
+          (_selType == 'stock_move' && txType == 'stock_move') ||
+          (_selType == 'out' && txType != 'stock_move' && ledType == 'out') ||
+          (_selType == 'in' && txType != 'stock_move' && ledType == 'in');
+
+      final matchesFrom = _fromDate == null ||
+          (itemDate != null && !itemDate.isBefore(_fromDate!));
+      final matchesTo = _toDate == null ||
+          (itemDate != null && !itemDate.isAfter(_toDate!));
+
+      return matchesSearch &&
+          matchesMaterial &&
+          matchesRoute &&
+          matchesTransport &&
+          matchesType &&
+          matchesFrom &&
+          matchesTo;
+    }).cast<Map>().toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final q = widget.search.toLowerCase();
-    final filtered = q.isEmpty
-        ? _items
-        : _items.where((i) {
-            final mat = (i['material']?['name'] ?? '').toString().toLowerCase();
-            final b1 = (i['branch']?['name'] ?? '').toString().toLowerCase();
-            final b2 =
-                (i['fromBranch']?['name'] ?? '').toString().toLowerCase();
-            final b3 = (i['toBranch']?['name'] ?? '').toString().toLowerCase();
-            return mat.contains(q) ||
-                b1.contains(q) ||
-                b2.contains(q) ||
-                b3.contains(q);
-          }).toList();
-
     if (_loading) return const AppLoader();
-    if (filtered.isEmpty) {
-      return const EmptyState(
-          message: 'No stock movements', icon: Icons.swap_vert);
-    }
+
+    final results = _filtered;
 
     return LayoutBuilder(builder: (_, constraints) {
       final isMobile = constraints.maxWidth < 700;
-      return RefreshIndicator(
-        onRefresh: _load,
-        child: isMobile
-            ? ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(12),
-                itemCount: filtered.length,
-                itemBuilder: (_, i) => _HistoryCard(
-                  item: filtered[i],
-                  onEdit: () => _openStockForm(context,
-                      item: filtered[i], onSaved: _load),
-                  onDelete: () => _delete(filtered[i]['_id']),
-                ),
-              )
-            : _buildDesktopTable(filtered),
+      return Column(
+        children: [
+          _buildFilterBar(results.length),
+          Expanded(
+            child: results.isEmpty
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 60),
+                      child: EmptyState(
+                        message: _activeFilterCount > 0
+                            ? 'No results for current filters'
+                            : 'No stock movements',
+                        icon: Icons.swap_vert,
+                      ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: isMobile
+                        ? ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(12),
+                            itemCount: results.length,
+                            itemBuilder: (_, i) => _HistoryCard(
+                              item: results[i],
+                              onEdit: () => _openStockForm(context,
+                                  item: results[i], onSaved: _load),
+                              onDelete: () => _delete(results[i]['_id']),
+                            ),
+                          )
+                        : _buildDesktopTable(results),
+                  ),
+          ),
+        ],
       );
     });
   }
 
-  Widget _buildDesktopTable(List filtered) {
-    const hdr = TextStyle(
-        fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
-    return Column(children: [
-      Container(
-        color: const Color(0xFFF9FAFB),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: const Row(children: [
-          SizedBox(width: 40, child: Text('#', style: hdr)),
-          SizedBox(width: 100, child: Text('TYPE', style: hdr)),
-          Expanded(flex: 2, child: Text('MATERIAL', style: hdr)),
-          Expanded(flex: 3, child: Text('BRANCH / ROUTE', style: hdr)),
+  // ── Filter Bar ──────────────────────────────────────────────────────────────
+
+  static const _green = Color(0xFF2E7D52);
+  static const _greenLight = Color(0xFFE8F5E9);
+
+  Widget _buildFilterBar(int resultCount) {
+    final hasFilters = _activeFilterCount > 0;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFFE8ECF0), width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header row ────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: Row(children: [
+              const Icon(Icons.filter_list_rounded,
+                  size: 15, color: Color(0xFF64748B)),
+              const SizedBox(width: 6),
+              const Text('Filters',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF475569))),
+              if (hasFilters) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: _green,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text('$_activeFilterCount',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                ),
+              ],
+              const Spacer(),
+              // Result count
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Text('$resultCount record${resultCount != 1 ? 's' : ''}',
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B))),
+              ),
+              if (hasFilters) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: _clearFilters,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(6),
+                        border:
+                            Border.all(color: const Color(0xFFFECACA))),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.close_rounded,
+                          size: 11, color: Color(0xFFDC2626)),
+                      SizedBox(width: 4),
+                      Text('Clear all',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFDC2626))),
+                    ]),
+                  ),
+                ),
+              ],
+            ]),
+          ),
+          const SizedBox(height: 8),
+
+          // ── Type quick-filter chips ────────────────────────────────────────
           SizedBox(
-              width: 90,
-              child: Text('QUANTITY', style: hdr, textAlign: TextAlign.right)),
-          Expanded(flex: 2, child: Text('DATE', style: hdr)),
-          SizedBox(width: 48),
+            height: 32,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              children: [
+                _typeChip(null, 'All', Icons.layers_outlined),
+                const SizedBox(width: 6),
+                _typeChip('store', 'Store', Icons.add_box_outlined),
+                const SizedBox(width: 6),
+                _typeChip('stock_move', 'Move',
+                    Icons.local_shipping_outlined),
+                const SizedBox(width: 6),
+                _typeChip('in', 'Received', Icons.add_circle_outline),
+                const SizedBox(width: 6),
+                _typeChip('out', 'Issued', Icons.remove_circle_outline),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // ── Dropdown + date row ────────────────────────────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: Row(children: [
+              _filterDropdown(
+                icon: Icons.category_outlined,
+                hint: 'Material',
+                value: _selMaterial,
+                items: _getMaterials(),
+                onChanged: (v) => setState(() => _selMaterial = v),
+              ),
+              const SizedBox(width: 8),
+              _filterDropdown(
+                icon: Icons.alt_route_outlined,
+                hint: 'Route',
+                value: _selRoute,
+                items: _getRoutes(),
+                onChanged: (v) => setState(() => _selRoute = v),
+              ),
+              const SizedBox(width: 8),
+              _filterDropdown(
+                icon: Icons.local_shipping_outlined,
+                hint: 'Transport',
+                value: _selTransport,
+                items: _getTransports(),
+                onChanged: (v) => setState(() => _selTransport = v),
+              ),
+              const SizedBox(width: 8),
+              _datePill(
+                  'From',
+                  _fromDate,
+                  (d) => setState(() => _fromDate = d),
+                  () => setState(() => _fromDate = null)),
+              const SizedBox(width: 8),
+              _datePill(
+                  'To',
+                  _toDate,
+                  (d) => setState(() => _toDate = d),
+                  () => setState(() => _toDate = null)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _typeChip(String? type, String label, IconData icon) {
+    final selected = _selType == type;
+    return GestureDetector(
+      onTap: () => setState(() => _selType = type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? _green : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? _green : const Color(0xFFE2E8F0), width: 1.2),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon,
+              size: 12, color: selected ? Colors.white : const Color(0xFF64748B)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color:
+                      selected ? Colors.white : const Color(0xFF475569))),
         ]),
       ),
-      Expanded(
-          child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: filtered.length,
-        itemBuilder: (_, i) {
-          final item = filtered[i];
-          final txType = item['transactionType'] as String? ?? '';
-          final ledType = item['type'] as String? ?? 'in';
-          final matName = (item['material']?['name'] ?? '—') as String;
-          final matUnit = (item['material']?['unit'] ?? '') as String;
-          final qty = (item['quantity'] as num? ?? 0).toDouble();
-          final isMove = txType == 'stock_move';
-          final from = (item['fromBranch']?['name'] ?? '') as String;
-          final to = (item['toBranch']?['name'] ?? '') as String;
-          final branch = (item['branch']?['name'] ?? '—') as String;
-          final branchLine = isMove ? '$from  →  $to' : branch;
-          final cfg = _txConfig(txType, ledType);
-          return InkWell(
-            onTap: () => _openStockForm(context, item: item, onSaved: _load),
-            hoverColor: const Color(0xFFF0FDF4),
-            child: Container(
-              decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-              child: Row(children: [
-                SizedBox(
-                    width: 40,
-                    child: Text('${i + 1}',
+    );
+  }
+
+  Widget _filterDropdown({
+    required IconData icon,
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final active = value != null;
+    return Container(
+      width: 160,
+      height: 36,
+      decoration: BoxDecoration(
+        color: active ? _greenLight : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: active ? _green.withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
+            width: 1.2),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          isExpanded: true,
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: active ? _green : const Color(0xFF94A3B8)),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          hint: Row(children: [
+            Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
+            const SizedBox(width: 6),
+            Text(hint,
+                style: const TextStyle(
+                    fontSize: 12, color: Color(0xFF94A3B8))),
+          ]),
+          selectedItemBuilder: (_) => [
+            // index 0 → null selected (show plain hint)
+            Row(children: [
+              Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
+              const SizedBox(width: 6),
+              Text(hint,
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFF94A3B8))),
+            ]),
+            // index 1..n → each real item selected
+            ...items.map((e) => Row(children: [
+                  Icon(icon, size: 13, color: _green),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(e,
                         style: const TextStyle(
-                            fontSize: 13, color: Color(0xFF9CA3AF)))),
-                SizedBox(
-                    width: 100,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: cfg.labelBg,
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Text(cfg.label,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: cfg.labelColor),
-                          overflow: TextOverflow.ellipsis),
-                    )),
-                Expanded(
-                    flex: 2,
-                    child: Text(matName,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF111827)),
-                        overflow: TextOverflow.ellipsis)),
-                Expanded(
-                    flex: 3,
-                    child: Text(branchLine,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF6B7280)),
-                        overflow: TextOverflow.ellipsis)),
-                SizedBox(
-                    width: 90,
-                    child: Text('${cfg.qtyPrefix}${_fmt(qty)} $matUnit',
-                        style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: cfg.badgeColor),
-                        textAlign: TextAlign.right)),
-                Expanded(
-                    flex: 2,
-                    child: Text(_fmtDate(item['date'] as String?),
-                        style: const TextStyle(
-                            fontSize: 13, color: Color(0xFF6B7280)))),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz_rounded,
-                      size: 18, color: Color(0xFF9CA3AF)),
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  elevation: 3,
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                        value: 'edit',
-                        child: Row(children: [
-                          Icon(Icons.edit_outlined,
-                              size: 15, color: Color(0xFF374151)),
-                          SizedBox(width: 8),
-                          Text('Edit', style: TextStyle(fontSize: 13)),
-                        ])),
-                    PopupMenuItem(
-                        value: 'delete',
-                        child: Row(children: [
-                          Icon(Icons.delete_outline_rounded,
-                              size: 15, color: Color(0xFFDC2626)),
-                          SizedBox(width: 8),
-                          Text('Delete',
-                              style: TextStyle(
-                                  fontSize: 13, color: Color(0xFFDC2626))),
-                        ])),
-                  ],
-                  onSelected: (v) {
-                    if (v == 'edit')
-                      _openStockForm(context, item: item, onSaved: _load);
-                    if (v == 'delete') _delete(item['_id']);
-                  },
-                ),
-              ]),
+                            color: _green),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ])),
+          ],
+          items: [
+            DropdownMenuItem<String>(
+              value: null,
+              child: Text('All $hint',
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFF94A3B8))),
             ),
-          );
-        },
-      )),
+            ...items.map((e) => DropdownMenuItem(
+                  value: e,
+                  child: Text(e,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis),
+                )),
+          ],
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _datePill(String label, DateTime? value, Function(DateTime) onPick,
+      VoidCallback onClear) {
+    final active = value != null;
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+          initialDate: value ?? DateTime.now(),
+          builder: (ctx, child) => Theme(
+            data: Theme.of(ctx).copyWith(
+              colorScheme: const ColorScheme.light(primary: _green),
+            ),
+            child: child!,
+          ),
+        );
+        if (picked != null) onPick(picked);
+      },
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: active ? _greenLight : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: active
+                  ? _green.withValues(alpha: 0.5)
+                  : const Color(0xFFE2E8F0),
+              width: 1.2),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.calendar_today_outlined,
+              size: 13, color: active ? _green : const Color(0xFF94A3B8)),
+          const SizedBox(width: 6),
+          Text(
+            active ? '$label: ${_fmtDate(value.toIso8601String())}' : label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active ? _green : const Color(0xFF94A3B8)),
+          ),
+          if (active) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onClear,
+              child: const Icon(Icons.close_rounded,
+                  size: 13, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  List<String> _getMaterials() => _items
+      .map((e) => e['material']?['name']?.toString())
+      .whereType<String>()
+      .toSet()
+      .toList()
+    ..sort();
+
+  List<String> _getRoutes() => _items
+      .where((e) =>
+          (e['fromBranch']?['name'] ?? '').toString().isNotEmpty &&
+          (e['toBranch']?['name'] ?? '').toString().isNotEmpty)
+      .map((e) =>
+          '${e['fromBranch']['name']} → ${e['toBranch']['name']}')
+      .toSet()
+      .toList()
+    ..sort();
+
+  List<String> _getTransports() => _items
+      .map((e) => e['transportName']?.toString() ?? '')
+      .where((e) => e.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort();
+
+  Widget _buildDesktopTable(List filtered) {
+    const hdr = TextStyle(
+        fontSize: 10,
+        color: Color(0xFF94A3B8),
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8);
+    return Column(children: [
+      // ── Header ──────────────────────────────────────────────────────────────
+      Container(
+        color: const Color(0xFFF8FAFC),
+        padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
+        child: const Row(children: [
+          SizedBox(width: 32, child: Text('#', style: hdr)),
+          SizedBox(width: 120, child: Text('TYPE', style: hdr)),
+          Expanded(flex: 3, child: Text('MATERIAL', style: hdr)),
+          Expanded(flex: 4, child: Text('BRANCH / ROUTE', style: hdr)),
+          Expanded(flex: 3, child: Text('TRANSPORT', style: hdr)),
+          SizedBox(width: 110, child: Text('QTY', style: hdr, textAlign: TextAlign.center)),
+          SizedBox(width: 100, child: Text('DATE', style: hdr)),
+          SizedBox(width: 36),
+        ]),
+      ),
+      const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+
+      // ── Rows ────────────────────────────────────────────────────────────────
+      Expanded(
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
+          itemCount: filtered.length,
+          itemBuilder: (_, i) {
+            final item = filtered[i];
+            final txType = (item['transactionType'] ?? '') as String;
+            final ledType = (item['type'] ?? 'in') as String;
+            final matName = (item['material']?['name'] ?? '—') as String;
+            final matUnit = (item['material']?['unit'] ?? '') as String;
+            final qty = (item['quantity'] as num? ?? 0).toDouble();
+            final isMove = txType == 'stock_move';
+            final from = (item['fromBranch']?['name'] ?? '') as String;
+            final to = (item['toBranch']?['name'] ?? '') as String;
+            final branch = (item['branch']?['name'] ?? '—') as String;
+            final cfg = _txConfig(txType, ledType);
+            final transportName = (item['transportName'] ?? '') as String;
+            final vehicleName = (item['vehicleName'] ?? '') as String;
+            final driverName = (item['driverName'] ?? '') as String;
+            final distance = item['distance'] as num?;
+            final cost = item['cost'] as num?;
+
+            return InkWell(
+              onTap: () => _openStockForm(context, item: item, onSaved: _load),
+              borderRadius: BorderRadius.circular(10),
+              hoverColor: cfg.iconBg.withValues(alpha: 0.4),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.025),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1)),
+                  ],
+                ),
+                child: IntrinsicHeight(
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    // Colored left strip
+                    Container(
+                      width: 4,
+                      decoration: BoxDecoration(
+                        color: cfg.iconColor,
+                        borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(10),
+                            bottomLeft: Radius.circular(10)),
+                      ),
+                    ),
+                    // Index
+                    SizedBox(
+                      width: 32,
+                      child: Center(
+                        child: Text('${i + 1}',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFCBD5E1))),
+                      ),
+                    ),
+                    // TYPE badge
+                    SizedBox(
+                      width: 120,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: cfg.labelBg,
+                              borderRadius: BorderRadius.circular(20)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(cfg.icon, size: 10, color: cfg.labelColor),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(cfg.label,
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: cfg.labelColor),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                          ]),
+                        ),
+                      ),
+                    ),
+                    // MATERIAL
+                    Expanded(
+                      flex: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: cfg.iconBg,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(cfg.icon, size: 15, color: cfg.iconColor),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(matName,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1E293B)),
+                                    overflow: TextOverflow.ellipsis),
+                                if (matUnit.isNotEmpty)
+                                  Text(matUnit,
+                                      style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xFF94A3B8))),
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    // BRANCH / ROUTE
+                    Expanded(
+                      flex: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                        child: isMove
+                            ? _RouteWidget(from: from, to: to)
+                            : Row(children: [
+                                const Icon(Icons.warehouse_outlined,
+                                    size: 13, color: Color(0xFF64748B)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(branch,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF374151)),
+                                      overflow: TextOverflow.ellipsis),
+                                ),
+                              ]),
+                      ),
+                    ),
+                    // TRANSPORT
+                    Expanded(
+                      flex: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                        child: _TransportSummaryCell(
+                          name: transportName,
+                          vehicle: vehicleName,
+                          driver: driverName,
+                          distance: distance,
+                          cost: cost,
+                        ),
+                      ),
+                    ),
+                    // QTY
+                    SizedBox(
+                      width: 110,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: cfg.badgeBg,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: cfg.badgeColor.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            '${cfg.qtyPrefix}${_fmt(qty)} $matUnit',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: cfg.badgeColor),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // DATE
+                    SizedBox(
+                      width: 100,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _fmtDateShort(item['date'] as String?),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF374151)),
+                            ),
+                            Text(
+                              _fmtYear(item['date'] as String?),
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF94A3B8)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // ACTIONS
+                    SizedBox(
+                      width: 36,
+                      child: Center(
+                        child: _ActionMenu(
+                          onEdit: () =>
+                              _openStockForm(context, item: item, onSaved: _load),
+                          onDelete: () => _delete(item['_id']),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     ]);
   }
 }
 
-// ── History Card ──────────────────────────────────────────────────────────────
+// ── History Card (mobile) ─────────────────────────────────────────────────────
 
 class _HistoryCard extends StatelessWidget {
   final Map item;
@@ -1246,211 +1799,454 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final txType = item['transactionType'] as String? ?? '';
-    final ledgerType = item['type'] as String? ?? 'in';
+    final txType = (item['transactionType'] ?? '') as String;
+    final ledgerType = (item['type'] ?? 'in') as String;
     final matName = (item['material']?['name'] ?? '—') as String;
     final matUnit = (item['material']?['unit'] ?? '') as String;
     final qty = (item['quantity'] as num? ?? 0).toDouble();
     final remarks = (item['remarks'] ?? '') as String;
     final dateStr = item['date'] as String?;
-
     final isMove = txType == 'stock_move';
     final cfg = _txConfig(txType, ledgerType);
 
     final fromBranch = (item['fromBranch']?['name'] ?? '') as String;
     final toBranch = (item['toBranch']?['name'] ?? '') as String;
     final branch = (item['branch']?['name'] ?? '—') as String;
-    final branchLine = isMove ? '$fromBranch  →  $toBranch' : branch;
-
+    final transportName = (item['transportName'] ?? '') as String;
     final vehicleName = (item['vehicleName'] ?? '') as String;
     final driverName = (item['driverName'] ?? '') as String;
-    final transportName = (item['transportName'] ?? '') as String;
     final distance = item['distance'] as num?;
     final cost = item['cost'] as num?;
+    final hasTransport = transportName.isNotEmpty ||
+        vehicleName.isNotEmpty ||
+        driverName.isNotEmpty ||
+        distance != null ||
+        cost != null;
 
-    final transportLine = [
-      if (transportName.isNotEmpty) transportName,
-      if (vehicleName.isNotEmpty) vehicleName,
-      if (driverName.isNotEmpty) driverName,
-    ].join(' · ');
-    final distCost = [
-      if (distance != null) '${distance}km',
-      if (cost != null) '₹$cost',
-    ].join(' · ');
+    return GestureDetector(
+      onTap: () => _openStockForm(context, item: item,
+          onSaved: () {}), // parent handles reload via onEdit
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFEEF2F6)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            // ── Accent strip ──────────────────────────────────────────────
+            Container(width: 4, color: cfg.iconColor),
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: cfg.iconBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(cfg.icon, size: 20, color: cfg.iconColor),
-            ),
-            const SizedBox(width: 12),
-            // Details
+            // ── Body ──────────────────────────────────────────────────────
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          matName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: Color(0xFF1A1A1A)),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Qty badge
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Row 1 — type badge · date · menu
+                    Row(children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: cfg.labelBg,
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(cfg.icon, size: 10, color: cfg.labelColor),
+                          const SizedBox(width: 4),
+                          Text(cfg.label,
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: cfg.labelColor)),
+                        ]),
+                      ),
+                      const Spacer(),
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 10, color: Color(0xFFB0BEC5)),
+                      const SizedBox(width: 4),
+                      Text(_fmtDate(dateStr),
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF94A3B8))),
+                      const SizedBox(width: 4),
+                      _ActionMenu(onEdit: onEdit, onDelete: onDelete),
+                    ]),
+
+                    const SizedBox(height: 10),
+
+                    // Row 2 — icon · name · qty
+                    Row(children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: cfg.iconBg,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(cfg.icon, size: 19, color: cfg.iconColor),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(matName,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1E293B)),
+                                overflow: TextOverflow.ellipsis),
+                            if (matUnit.isNotEmpty)
+                              Text(matUnit,
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFF94A3B8))),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
                           color: cfg.badgeBg,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: cfg.badgeColor.withValues(alpha: 0.25)),
                         ),
                         child: Text(
                           '${cfg.qtyPrefix}${_fmt(qty)} $matUnit',
                           style: TextStyle(
-                              fontWeight: FontWeight.w700,
                               fontSize: 12,
+                              fontWeight: FontWeight.w800,
                               color: cfg.badgeColor),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(children: [
+                    ]),
+
+                    const SizedBox(height: 8),
+
+                    // Row 3 — route / branch
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                          horizontal: 10, vertical: 7),
                       decoration: BoxDecoration(
-                        color: cfg.labelBg,
-                        borderRadius: BorderRadius.circular(10),
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE8ECF0)),
                       ),
-                      child: Text(cfg.label,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: cfg.labelColor)),
+                      child: isMove
+                          ? _RouteWidget(from: fromBranch, to: toBranch)
+                          : Row(children: [
+                              const Icon(Icons.warehouse_outlined,
+                                  size: 13, color: Color(0xFF64748B)),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(branch,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF334155)),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                            ]),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        branchLine,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF424242)),
-                        overflow: TextOverflow.ellipsis,
+
+                    // Row 4 — transport (if any)
+                    if (hasTransport) ...[
+                      const SizedBox(height: 6),
+                      _TransportSummaryCell(
+                        name: transportName,
+                        vehicle: vehicleName,
+                        driver: driverName,
+                        distance: distance,
+                        cost: cost,
+                        inCard: true,
                       ),
-                    ),
-                  ]),
-                  if (transportLine.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      const Icon(Icons.local_shipping_outlined,
-                          size: 12, color: Color(0xFF6A1B9A)),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          transportLine,
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF6A1B9A)),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    ],
+
+                    // Row 5 — remarks (if any)
+                    if (remarks.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        const Icon(Icons.notes_rounded,
+                            size: 12, color: Color(0xFFB0BEC5)),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(remarks,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF9E9E9E),
+                                  fontStyle: FontStyle.italic),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
                         ),
-                      ),
-                    ]),
+                      ]),
+                    ],
                   ],
-                  if (distCost.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Row(children: [
-                      const Icon(Icons.route_outlined,
-                          size: 12, color: Color(0xFF9E9E9E)),
-                      const SizedBox(width: 4),
-                      Text(distCost,
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF9E9E9E))),
-                    ]),
-                  ],
-                  if (remarks.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      remarks,
-                      style: const TextStyle(
-                          fontSize: 11, color: Color(0xFF9E9E9E)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 4),
-                  Text(
-                    _fmtDate(dateStr),
-                    style:
-                        const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E)),
-                  ),
-                ],
+                ),
               ),
             ),
-            // Actions
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_horiz_rounded,
-                  size: 18, color: Color(0xFF9CA3AF)),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              elevation: 3,
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Row(children: [
-                    Icon(Icons.edit_outlined,
-                        size: 15, color: Color(0xFF374151)),
-                    SizedBox(width: 8),
-                    Text('Edit', style: TextStyle(fontSize: 13)),
-                  ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared sub-widgets ────────────────────────────────────────────────────────
+
+class _RouteWidget extends StatelessWidget {
+  final String from;
+  final String to;
+  const _RouteWidget({required this.from, required this.to});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      const Icon(Icons.warehouse_outlined, size: 13, color: Color(0xFF64748B)),
+      const SizedBox(width: 6),
+      Flexible(
+        child: Text(from,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155)),
+            overflow: TextOverflow.ellipsis),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text('→',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF7C3AED))),
+        ),
+      ),
+      Flexible(
+        child: Text(to,
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155)),
+            overflow: TextOverflow.ellipsis),
+      ),
+    ]);
+  }
+}
+
+class _TransportSummaryCell extends StatelessWidget {
+  final String name;
+  final String vehicle;
+  final String driver;
+  final num? distance;
+  final num? cost;
+  final bool inCard;
+  const _TransportSummaryCell({
+    required this.name,
+    required this.vehicle,
+    required this.driver,
+    this.distance,
+    this.cost,
+    this.inCard = false,
+  });
+
+  static const _purple = Color(0xFF6A1B9A);
+  static const _purpleBg = Color(0xFFF5F0FF);
+  static const _purpleBorder = Color(0xFFDDD6FE);
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAny = name.isNotEmpty ||
+        vehicle.isNotEmpty ||
+        driver.isNotEmpty ||
+        distance != null ||
+        cost != null;
+    if (!hasAny) {
+      return const Text('—',
+          style: TextStyle(fontSize: 14, color: Color(0xFFE2E8F0)));
+    }
+
+    // ── Card mode: transport-screen style ──────────────────────────────────
+    if (inCard) {
+      // headline = vehicle no. or transport name (whichever is more prominent)
+      final headline = vehicle.isNotEmpty ? vehicle : name;
+      final subParts = <String>[
+        if (name.isNotEmpty && vehicle.isNotEmpty) name,
+        if (driver.isNotEmpty) driver,
+      ];
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: _purpleBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _purpleBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Row 1: icon + headline + cost badge
+            Row(children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _purple.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(9),
                 ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Row(children: [
-                    Icon(Icons.delete_outline_rounded,
-                        size: 15, color: Color(0xFFDC2626)),
-                    SizedBox(width: 8),
-                    Text('Delete',
-                        style:
-                            TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-                  ]),
+                child: const Icon(Icons.local_shipping_outlined,
+                    size: 17, color: _purple),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(headline,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B)),
+                        overflow: TextOverflow.ellipsis),
+                    if (subParts.isNotEmpty)
+                      Text(subParts.join(' · '),
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF94A3B8)),
+                          overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              if (cost != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border:
+                        Border.all(color: _purple.withValues(alpha: 0.25)),
+                  ),
+                  child: Text('₹$cost',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: _purple)),
                 ),
               ],
-              onSelected: (v) {
-                if (v == 'edit') onEdit();
-                if (v == 'delete') onDelete();
-              },
-            ),
+            ]),
+
+            // Row 2: distance + driver (if not already in subtitle)
+            if (distance != null || (driver.isNotEmpty && subParts.isEmpty)) ...[
+              const SizedBox(height: 7),
+              Wrap(spacing: 12, runSpacing: 4, children: [
+                if (driver.isNotEmpty && subParts.isEmpty)
+                  _infoChip(Icons.person_outline_rounded, driver,
+                      const Color(0xFF0369A1)),
+                if (distance != null)
+                  _infoChip(Icons.route_outlined, '${distance}km',
+                      const Color(0xFF374151)),
+              ]),
+            ],
           ],
         ),
+      );
+    }
+
+    // ── Table / inline mode: compact chips row ─────────────────────────────
+    return Row(children: [
+      const Icon(Icons.local_shipping_outlined,
+          size: 12, color: _purple),
+      const SizedBox(width: 5),
+      Expanded(
+        child: Wrap(spacing: 6, runSpacing: 3, children: [
+          if (name.isNotEmpty)
+            _infoChip(Icons.business_outlined, name, _purple),
+          if (vehicle.isNotEmpty)
+            _infoChip(Icons.directions_car_outlined, vehicle,
+                const Color(0xFF0369A1)),
+          if (driver.isNotEmpty)
+            _infoChip(Icons.person_outline_rounded, driver,
+                const Color(0xFF0369A1)),
+          if (distance != null)
+            _infoChip(Icons.route_outlined, '${distance}km',
+                const Color(0xFF374151)),
+          if (cost != null)
+            _infoChip(Icons.currency_rupee_rounded, '₹$cost',
+                const Color(0xFF374151)),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _infoChip(IconData icon, String label, Color color) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color.withValues(alpha: 0.7)),
+          const SizedBox(width: 3),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w500, color: color)),
+        ],
+      );
+}
+
+class _ActionMenu extends StatelessWidget {
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  const _ActionMenu({required this.onEdit, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert_rounded,
+            size: 16, color: Color(0xFFB0BEC5)),
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 3,
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(children: [
+              Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
+              SizedBox(width: 8),
+              Text('Edit', style: TextStyle(fontSize: 13)),
+            ]),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(children: [
+              Icon(Icons.delete_outline_rounded,
+                  size: 15, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text('Delete',
+                  style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+            ]),
+          ),
+        ],
+        onSelected: (v) {
+          if (v == 'edit') onEdit();
+          if (v == 'delete') onDelete();
+        },
       ),
     );
   }
@@ -1543,6 +2339,20 @@ String _fmtDate(String? d) {
   final dt = DateTime.tryParse(d);
   if (dt == null) return '—';
   return DateFormat('dd MMM yyyy').format(dt.toLocal());
+}
+
+String _fmtDateShort(String? d) {
+  if (d == null) return '—';
+  final dt = DateTime.tryParse(d);
+  if (dt == null) return '—';
+  return DateFormat('dd MMM').format(dt.toLocal());
+}
+
+String _fmtYear(String? d) {
+  if (d == null) return '';
+  final dt = DateTime.tryParse(d);
+  if (dt == null) return '';
+  return DateFormat('yyyy').format(dt.toLocal());
 }
 
 IconData _matIcon(String name) {
@@ -1785,16 +2595,15 @@ class _StockFormPanelState extends State<StockFormPanel> {
         'quantity': qty,
         'date': _date.toIso8601String(),
         'remarks': _remarksCtrl.text.trim(),
-        if (_transportNameCtrl.text.trim().isNotEmpty)
-          'transportName': _transportNameCtrl.text.trim(),
-        if (_driverNameCtrl.text.trim().isNotEmpty)
-          'driverName': _driverNameCtrl.text.trim(),
-        if (_vehicleNameCtrl.text.trim().isNotEmpty)
-          'vehicleName': _vehicleNameCtrl.text.trim(),
-        if (_distanceCtrl.text.trim().isNotEmpty)
-          'distance': double.tryParse(_distanceCtrl.text.trim()),
-        if (_costCtrl.text.trim().isNotEmpty)
-          'cost': double.tryParse(_costCtrl.text.trim()),
+        'transportName': _transportNameCtrl.text.trim(),
+        'driverName': _driverNameCtrl.text.trim(),
+        'vehicleName': _vehicleNameCtrl.text.trim(),
+        'distance': _distanceCtrl.text.trim().isNotEmpty
+            ? double.tryParse(_distanceCtrl.text.trim())
+            : null,
+        'cost': _costCtrl.text.trim().isNotEmpty
+            ? double.tryParse(_costCtrl.text.trim())
+            : null,
       };
     }
 

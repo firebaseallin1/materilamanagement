@@ -4,9 +4,8 @@ import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
-const _kTrpHdr = TextStyle(fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
-const _trpPrimary = Color(0xFF111827);
 const _trpTeal = Color(0xFF0D9488);
+const _trpPurple = Color(0xFF6A1B9A);
 
 // ════════════════════════════════════════════════
 // TRANSPORT SCREEN  (Deliveries + Stock Moves combined)
@@ -22,8 +21,18 @@ class _TransportScreenState extends State<TransportScreen> {
   bool _loading = true;
   String _search = '';
 
+  // Filters
+  String? _typeFilter; // null = all | 'delivery' | 'stock_move'
+  String? _selTransport;
+  String? _selMaterial;
+  DateTime? _fromDate;
+  DateTime? _toDate;
+
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -56,20 +65,73 @@ class _TransportScreenState extends State<TransportScreen> {
     if (!await confirmDelete(context)) return;
     final res = await ApiService.delete('/transport/$id');
     if (mounted) {
-      showSnack(context, res['success'] == true ? 'Deleted' : res['message'], error: res['success'] != true);
+      showSnack(context, res['success'] == true ? 'Deleted' : res['message'],
+          error: res['success'] != true);
       if (res['success'] == true) _load();
     }
   }
 
+  void _clearFilters() => setState(() {
+        _typeFilter = null;
+        _selTransport = null;
+        _selMaterial = null;
+        _fromDate = null;
+        _toDate = null;
+      });
+
+  int get _activeFilters =>
+      [_typeFilter, _selTransport, _selMaterial, _fromDate, _toDate]
+          .where((e) => e != null)
+          .length;
+
   List get _filtered {
-    if (_search.isEmpty) return _items;
     final q = _search.toLowerCase().trim();
     return _items.where((item) {
       final isStockMove = item['recordType'] == 'stock_move';
-      final vehicle = (isStockMove ? item['vehicleName'] : item['vehicleNo'])?.toString().toLowerCase() ?? '';
+      final vehicle = (isStockMove ? item['vehicleName'] : item['vehicleNo'])
+              ?.toString()
+              .toLowerCase() ??
+          '';
       final driver = (item['driverName'] ?? '').toString().toLowerCase();
-      final material = (item['material'] as Map?)?['name']?.toString().toLowerCase() ?? '';
-      return vehicle.contains(q) || driver.contains(q) || material.contains(q);
+      final material =
+          (item['material'] as Map?)?['name']?.toString().toLowerCase() ?? '';
+
+      final raw = DateTime.tryParse(item['date']?.toString() ?? '');
+      final itemDate = raw != null
+          ? DateTime(raw.toLocal().year, raw.toLocal().month, raw.toLocal().day)
+          : null;
+
+      final transportName =
+          (item['transportName'] ?? '').toString().toLowerCase();
+
+      final matchesSearch = q.isEmpty ||
+          vehicle.contains(q) ||
+          driver.contains(q) ||
+          material.contains(q) ||
+          transportName.contains(q);
+
+      final matchesType = _typeFilter == null ||
+          (isStockMove
+              ? _typeFilter == 'stock_move'
+              : _typeFilter == 'delivery');
+
+      final matchesTransport = _selTransport == null ||
+          transportName == _selTransport!.toLowerCase();
+
+      final matchesMaterial = _selMaterial == null ||
+          material == _selMaterial!.toLowerCase();
+
+      final matchesFrom = _fromDate == null ||
+          (itemDate != null && !itemDate.isBefore(_fromDate!));
+      final matchesTo = _toDate == null ||
+          (itemDate != null && !itemDate.isAfter(_toDate!));
+
+      return matchesSearch &&
+          matchesType &&
+          matchesTransport &&
+          matchesMaterial &&
+          matchesFrom &&
+          matchesTo;
     }).toList();
   }
 
@@ -96,7 +158,10 @@ class _TransportScreenState extends State<TransportScreen> {
                 height: double.infinity,
                 child: TransportFormPanel(
                   item: item,
-                  onSaved: () { Navigator.of(ctx).pop(); _load(); },
+                  onSaved: () {
+                    Navigator.of(ctx).pop();
+                    _load();
+                  },
                 ),
               ),
             ),
@@ -110,13 +175,8 @@ class _TransportScreenState extends State<TransportScreen> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final isMobile = constraints.maxWidth < 700;
+      final results = _filtered;
       return Scaffold(
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _openForm(),
-          backgroundColor: _trpTeal,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('Add Transport', style: TextStyle(color: Colors.white)),
-        ),
         body: Column(children: [
           ScreenHeader(
             title: 'Transport',
@@ -124,16 +184,31 @@ class _TransportScreenState extends State<TransportScreen> {
             onRefresh: _load,
             onSearchChanged: (v) => setState(() => _search = v),
             searchHint: 'Search vehicle, driver, material…',
+            onAdd: () => _openForm(),
+            addLabel: 'Add Transport',
           ),
-          if (!isMobile) _buildTableHeader(),
+          _buildFilterBar(results.length),
           Expanded(
             child: _loading
                 ? const AppLoader()
-                : _filtered.isEmpty
-                    ? const EmptyState(message: 'No matching records', icon: Icons.local_shipping)
+                : results.isEmpty
+                    ? SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 60),
+                          child: EmptyState(
+                            message: _activeFilters > 0
+                                ? 'No results for current filters'
+                                : 'No transport records',
+                            icon: Icons.local_shipping_outlined,
+                          ),
+                        ),
+                      )
                     : RefreshIndicator(
                         onRefresh: _load,
-                        child: isMobile ? _buildMobileList() : _buildDesktopList(),
+                        child: isMobile
+                            ? _buildMobileList(results)
+                            : _buildDesktopList(results),
                       ),
           ),
         ]),
@@ -141,167 +216,845 @@ class _TransportScreenState extends State<TransportScreen> {
     });
   }
 
-  Widget _buildTableHeader() {
+  // ── Filter Bar ──────────────────────────────────────────────────────────────
+
+  Widget _buildFilterBar(int count) {
+    final hasFilters = _activeFilters > 0;
     return Container(
-      color: const Color(0xFFF9FAFB),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: const Row(children: [
-        SizedBox(width: 40, child: Text('#', style: _kTrpHdr)),
-        SizedBox(width: 88, child: Text('TYPE', style: _kTrpHdr)),
-        Expanded(flex: 2, child: Text('VEHICLE / DRIVER', style: _kTrpHdr)),
-        Expanded(flex: 3, child: Text('ROUTE', style: _kTrpHdr)),
-        Expanded(flex: 2, child: Text('MATERIAL', style: _kTrpHdr)),
-        SizedBox(width: 68, child: Text('COST', style: _kTrpHdr, textAlign: TextAlign.right)),
-        Expanded(flex: 2, child: Text('DATE', style: _kTrpHdr)),
-        SizedBox(width: 48),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(bottom: BorderSide(color: Color(0xFFE8ECF0))),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header row
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+          child: Row(children: [
+            const Icon(Icons.filter_list_rounded,
+                size: 15, color: Color(0xFF64748B)),
+            const SizedBox(width: 6),
+            const Text('Filters',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF475569))),
+            if (hasFilters) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                    color: _trpTeal, borderRadius: BorderRadius.circular(10)),
+                child: Text('$_activeFilters',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+              ),
+            ],
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Text('$count record${count != 1 ? 's' : ''}',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B))),
+            ),
+            if (hasFilters) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: _clearFilters,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFFECACA))),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.close_rounded,
+                        size: 11, color: Color(0xFFDC2626)),
+                    SizedBox(width: 4),
+                    Text('Clear all',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFDC2626))),
+                  ]),
+                ),
+              ),
+            ],
+          ]),
+        ),
+        const SizedBox(height: 8),
+
+        // Type chips
+        SizedBox(
+          height: 32,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            children: [
+              _typeChip(null, 'All', Icons.layers_outlined),
+              const SizedBox(width: 6),
+              _typeChip('delivery', 'Delivery', Icons.local_shipping_outlined),
+              const SizedBox(width: 6),
+              _typeChip('stock_move', 'Stock Move', Icons.swap_horiz_rounded),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Dropdowns + date row
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          child: Row(children: [
+            _filterDropdown(
+              icon: Icons.business_outlined,
+              hint: 'Transport',
+              value: _selTransport,
+              items: _getTransports(),
+              onChanged: (v) => setState(() => _selTransport = v),
+            ),
+            const SizedBox(width: 8),
+            _filterDropdown(
+              icon: Icons.inventory_2_outlined,
+              hint: 'Material',
+              value: _selMaterial,
+              items: _getMaterials(),
+              onChanged: (v) => setState(() => _selMaterial = v),
+            ),
+            const SizedBox(width: 8),
+            _datePill('From', _fromDate, (d) => setState(() => _fromDate = d),
+                () => setState(() => _fromDate = null)),
+            const SizedBox(width: 8),
+            _datePill('To', _toDate, (d) => setState(() => _toDate = d),
+                () => setState(() => _toDate = null)),
+          ]),
+        ),
       ]),
     );
   }
 
-  Widget _buildDesktopList() {
-    final list = _filtered;
-    return ListView.builder(
-      itemCount: list.length,
-      itemBuilder: (_, i) {
-        final item = list[i];
-        final isStockMove = item['recordType'] == 'stock_move';
-        final vehicleNo = isStockMove ? (item['vehicleName'] ?? '—') : (item['vehicleNo'] ?? '—');
-        final driver = item['driverName'] ?? '—';
-        final route = isStockMove
-            ? '${item['fromBranch']?['name'] ?? '—'} → ${item['toBranch']?['name'] ?? '—'}'
-            : '${item['fromLocation']?['name'] ?? '—'} → ${item['toLocation']?['name'] ?? '—'}';
-        final material = item['material']?['name'] ?? '—';
-        final cost = item['cost'];
-        final date = item['date'] != null
-            ? DateFormat('dd MMM yyyy').format(DateTime.tryParse(item['date']) ?? DateTime.now())
-            : '—';
-        return InkWell(
-          onTap: isStockMove ? null : () => _openForm(item),
-          hoverColor: const Color(0xFFF0FDF4),
-          child: Container(
-            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            child: Row(children: [
-              SizedBox(width: 40, child: Text('${i + 1}', style: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
-              SizedBox(width: 88, child: _typeBadge(isStockMove)),
-              Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(vehicleNo.toString(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _trpPrimary)),
-                Text(driver.toString(), style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-              ])),
-              Expanded(flex: 3, child: Text(route, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)), overflow: TextOverflow.ellipsis)),
-              Expanded(flex: 2, child: Text(material.toString(), style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)), overflow: TextOverflow.ellipsis)),
-              SizedBox(width: 68, child: Text(cost != null ? '₹$cost' : '—', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _trpTeal), textAlign: TextAlign.right)),
-              Expanded(flex: 2, child: Text(date, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)))),
-              isStockMove ? const SizedBox(width: 48) : _actionMenu(item),
-            ]),
-          ),
-        );
-      },
+  Widget _typeChip(String? type, String label, IconData icon) {
+    final selected = _typeFilter == type;
+    return GestureDetector(
+      onTap: () => setState(() => _typeFilter = type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? _trpTeal : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? _trpTeal : const Color(0xFFE2E8F0), width: 1.2),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon,
+              size: 12,
+              color: selected ? Colors.white : const Color(0xFF64748B)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : const Color(0xFF475569))),
+        ]),
+      ),
     );
   }
 
-  Widget _buildMobileList() {
-    final list = _filtered;
+  Widget _datePill(String label, DateTime? value, Function(DateTime) onPick,
+      VoidCallback onClear) {
+    final active = value != null;
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+          initialDate: value ?? DateTime.now(),
+          builder: (ctx, child) => Theme(
+            data: Theme.of(ctx).copyWith(
+              colorScheme:
+                  const ColorScheme.light(primary: _trpTeal),
+            ),
+            child: child!,
+          ),
+        );
+        if (picked != null) onPick(picked);
+      },
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFFCCFBF1)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color: active
+                  ? _trpTeal.withValues(alpha: 0.5)
+                  : const Color(0xFFE2E8F0),
+              width: 1.2),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.calendar_today_outlined,
+              size: 13, color: active ? _trpTeal : const Color(0xFF94A3B8)),
+          const SizedBox(width: 6),
+          Text(
+            active
+                ? '$label: ${DateFormat('dd MMM yyyy').format(value)}'
+                : label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active ? _trpTeal : const Color(0xFF94A3B8)),
+          ),
+          if (active) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onClear,
+              child: const Icon(Icons.close_rounded,
+                  size: 13, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _filterDropdown({
+    required IconData icon,
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final active = value != null;
+    return Container(
+      width: 160,
+      height: 36,
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFCCFBF1) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: active ? _trpTeal.withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
+            width: 1.2),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          isExpanded: true,
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              size: 16, color: active ? _trpTeal : const Color(0xFF94A3B8)),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          hint: Row(children: [
+            Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
+            const SizedBox(width: 6),
+            Text(hint,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+          ]),
+          selectedItemBuilder: (_) => [
+            Row(children: [
+              Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
+              const SizedBox(width: 6),
+              Text(hint,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            ]),
+            ...items.map((e) => Row(children: [
+                  Icon(icon, size: 13, color: _trpTeal),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(e,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _trpTeal),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ])),
+          ],
+          items: [
+            DropdownMenuItem<String>(
+              value: null,
+              child: Text('All $hint',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            ),
+            ...items.map((e) => DropdownMenuItem(
+                  value: e,
+                  child: Text(e,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis),
+                )),
+          ],
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  List<String> _getTransports() => _items
+      .map((e) => e['transportName']?.toString() ?? '')
+      .where((e) => e.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort();
+
+  List<String> _getMaterials() => _items
+      .map((e) => (e['material'] as Map?)?['name']?.toString() ?? '')
+      .where((e) => e.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort();
+
+  // ── Desktop Table ───────────────────────────────────────────────────────────
+
+  Widget _buildDesktopList(List list) {
+    const hdr = TextStyle(
+        fontSize: 10,
+        color: Color(0xFF94A3B8),
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8);
+
+    return Column(children: [
+      Container(
+        color: const Color(0xFFF8FAFC),
+        padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
+        child: const Row(children: [
+          SizedBox(width: 32, child: Text('#', style: hdr)),
+          SizedBox(width: 112, child: Text('TYPE', style: hdr)),
+          Expanded(flex: 3, child: Text('VEHICLE / DRIVER', style: hdr)),
+          Expanded(flex: 4, child: Text('ROUTE', style: hdr)),
+          Expanded(flex: 3, child: Text('MATERIAL', style: hdr)),
+          SizedBox(width: 90, child: Text('COST', style: hdr, textAlign: TextAlign.center)),
+          SizedBox(width: 110, child: Text('DATE', style: hdr)),
+          SizedBox(width: 36),
+        ]),
+      ),
+      const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+      Expanded(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
+          itemCount: list.length,
+          itemBuilder: (_, i) {
+            final item = list[i];
+            final isStockMove = item['recordType'] == 'stock_move';
+            final accent = isStockMove ? _trpPurple : _trpTeal;
+            final vehicleNo = isStockMove
+                ? (item['vehicleName'] ?? '—')
+                : (item['vehicleNo'] ?? '—');
+            final driver = (item['driverName'] ?? '—').toString();
+            final from = isStockMove
+                ? (item['fromBranch']?['name'] ?? '—')
+                : (item['fromLocation']?['name'] ?? '—');
+            final to = isStockMove
+                ? (item['toBranch']?['name'] ?? '—')
+                : (item['toLocation']?['name'] ?? '—');
+            final material =
+                (item['material']?['name'] ?? '—').toString();
+            final qty = item['quantity'];
+            final cost = item['cost'];
+            final dateStr = item['date'] as String?;
+
+            return InkWell(
+              onTap: isStockMove ? null : () => _openForm(item),
+              borderRadius: BorderRadius.circular(10),
+              hoverColor: accent.withValues(alpha: 0.04),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.025),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1)),
+                  ],
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                    // Accent strip
+                    Container(
+                      width: 4,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(10),
+                            bottomLeft: Radius.circular(10)),
+                      ),
+                    ),
+                    // Index
+                    SizedBox(
+                      width: 32,
+                      child: Center(
+                        child: Text('${i + 1}',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFCBD5E1))),
+                      ),
+                    ),
+                    // TYPE
+                    SizedBox(
+                      width: 112,
+                      child: Center(child: _typeBadge(isStockMove)),
+                    ),
+                    // VEHICLE / DRIVER
+                    Expanded(
+                      flex: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: Icon(Icons.directions_car_outlined,
+                                    size: 14, color: accent),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(vehicleNo.toString(),
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1E293B)),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                            ]),
+                            if (driver != '—') ...[
+                              const SizedBox(height: 2),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 36),
+                                child: Text(driver,
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF94A3B8)),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    // ROUTE
+                    Expanded(
+                      flex: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 4),
+                        child: Row(children: [
+                          const Icon(Icons.location_on_outlined,
+                              size: 13, color: Color(0xFF94A3B8)),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(from.toString(),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF374151)),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text('→',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: accent)),
+                            ),
+                          ),
+                          Flexible(
+                            child: Text(to.toString(),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF374151)),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    // MATERIAL
+                    Expanded(
+                      flex: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(material,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF374151)),
+                                overflow: TextOverflow.ellipsis),
+                            if (qty != null)
+                              Text('Qty: $qty',
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFF94A3B8))),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // COST
+                    SizedBox(
+                      width: 90,
+                      child: Center(
+                        child: cost != null
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _trpTeal.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color:
+                                          _trpTeal.withValues(alpha: 0.2)),
+                                ),
+                                child: Text('₹$cost',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: _trpTeal)),
+                              )
+                            : const Text('—',
+                                style: TextStyle(
+                                    color: Color(0xFFE2E8F0),
+                                    fontSize: 16)),
+                      ),
+                    ),
+                    // DATE
+                    SizedBox(
+                      width: 110,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _trpFmtShort(dateStr),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF374151)),
+                            ),
+                            Text(
+                              _trpFmtYear(dateStr),
+                              style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF94A3B8)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // ACTIONS
+                    SizedBox(
+                      width: 36,
+                      child: Center(
+                        child: isStockMove
+                            ? const SizedBox.shrink()
+                            : _actionMenu(item),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ]);
+  }
+
+  // ── Mobile Cards ────────────────────────────────────────────────────────────
+
+  Widget _buildMobileList(List list) {
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(12),
       itemCount: list.length,
       itemBuilder: (_, i) {
         final item = list[i];
         final isStockMove = item['recordType'] == 'stock_move';
-        final accentColor = isStockMove ? const Color(0xFF6A1B9A) : _trpTeal;
-        final vehicleNo = isStockMove ? (item['vehicleName'] ?? '—') : (item['vehicleNo'] ?? '—');
-        final driver = item['driverName'] ?? '—';
-        final route = isStockMove
-            ? '${item['fromBranch']?['name'] ?? '—'} → ${item['toBranch']?['name'] ?? '—'}'
-            : '${item['fromLocation']?['name'] ?? '—'} → ${item['toLocation']?['name'] ?? '—'}';
+        final accent = isStockMove ? _trpPurple : _trpTeal;
+        final vehicleNo = isStockMove
+            ? (item['vehicleName'] ?? '—').toString()
+            : (item['vehicleNo'] ?? '—').toString();
+        final driver = (item['driverName'] ?? '').toString();
+        final from = isStockMove
+            ? (item['fromBranch']?['name'] ?? '—').toString()
+            : (item['fromLocation']?['name'] ?? '—').toString();
+        final to = isStockMove
+            ? (item['toBranch']?['name'] ?? '—').toString()
+            : (item['toLocation']?['name'] ?? '—').toString();
         final cost = item['cost'];
-        final date = item['date'] != null
-            ? DateFormat('dd MMM yyyy').format(DateTime.tryParse(item['date']) ?? DateTime.now())
-            : '—';
-        final material = item['material']?['name'];
-        final qty = item['quantity'];
         final distance = item['distance'];
+        final material = item['material']?['name']?.toString();
+        final qty = item['quantity'];
         final remarks = (item['remarks'] ?? '').toString();
-        final transportName = item['transportName'];
+        final transportName = item['transportName']?.toString() ?? '';
+        final dateStr = item['date'] as String?;
+
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFEEEEEE)),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFEEF2F6)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2)),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              CircleAvatar(
-                backgroundColor: isStockMove ? const Color(0xFFF3E5F5) : const Color(0xFFE0F2FE),
-                child: Icon(Icons.local_shipping, color: accentColor),
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+              // Accent strip
+              Container(width: 4, color: accent),
+
+              // Body
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Row 1 — type badge · date · menu
+                      Row(children: [
+                        _typeBadge(isStockMove),
+                        const Spacer(),
+                        const Icon(Icons.calendar_today_outlined,
+                            size: 10, color: Color(0xFFB0BEC5)),
+                        const SizedBox(width: 4),
+                        Text(
+                          dateStr != null
+                              ? DateFormat('dd MMM yyyy').format(
+                                  DateTime.tryParse(dateStr)?.toLocal() ??
+                                      DateTime.now())
+                              : '—',
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF94A3B8)),
+                        ),
+                        const SizedBox(width: 4),
+                        if (!isStockMove) _actionMenu(item),
+                      ]),
+
+                      const SizedBox(height: 10),
+
+                      // Row 2 — vehicle icon · vehicle / driver · cost
+                      Row(children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.local_shipping_outlined,
+                              size: 20, color: accent),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(vehicleNo,
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1E293B)),
+                                  overflow: TextOverflow.ellipsis),
+                              if (driver.isNotEmpty)
+                                Text(driver,
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF94A3B8))),
+                            ],
+                          ),
+                        ),
+                        if (cost != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _trpTeal.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: _trpTeal.withValues(alpha: 0.2)),
+                            ),
+                            child: Text('₹$cost',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: _trpTeal)),
+                          ),
+                        ],
+                      ]),
+
+                      const SizedBox(height: 8),
+
+                      // Row 3 — route
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE8ECF0)),
+                        ),
+                        child: Row(children: [
+                          Icon(Icons.route_outlined,
+                              size: 13, color: accent.withValues(alpha: 0.7)),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(from,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF334155)),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text('→',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: accent)),
+                            ),
+                          ),
+                          Flexible(
+                            child: Text(to,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF334155)),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ]),
+                      ),
+
+                      // Row 4 — transport name
+                      if (transportName.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Icon(Icons.business_outlined,
+                              size: 12, color: accent.withValues(alpha: 0.7)),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(transportName,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: accent),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ]),
+                      ],
+
+                      // Row 5 — material + distance
+                      if (material != null || distance != null) ...[
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          if (material != null) ...[
+                            const Icon(Icons.inventory_2_outlined,
+                                size: 12, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                  qty != null
+                                      ? '$material · $qty'
+                                      : material,
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF64748B)),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
+                          if (distance != null) ...[
+                            const SizedBox(width: 10),
+                            const Icon(Icons.straighten,
+                                size: 12, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 4),
+                            Text('${distance}km',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF64748B))),
+                          ],
+                        ]),
+                      ],
+
+                      // Row 6 — remarks
+                      if (remarks.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Row(children: [
+                          const Icon(Icons.notes_rounded,
+                              size: 12, color: Color(0xFFB0BEC5)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(remarks,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF9E9E9E),
+                                    fontStyle: FontStyle.italic),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ]),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(
-                    child: Text(
-                      [vehicleNo.toString(), driver.toString()].where((s) => s != '—' && s.isNotEmpty).join('  ·  '),
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A1A)),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (cost != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: accentColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                      child: Text('₹$cost', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: accentColor)),
-                    ),
-                ]),
-                const SizedBox(height: 4),
-                if (transportName != null && transportName.toString().isNotEmpty) ...[
-                  Text(transportName.toString(), style: TextStyle(fontSize: 12, color: accentColor, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                ],
-                Row(children: [
-                  Icon(Icons.route_outlined, size: 13, color: Colors.grey.shade500),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text(route, style: const TextStyle(fontSize: 12, color: Color(0xFF424242)), overflow: TextOverflow.ellipsis)),
-                ]),
-                if (material != null && material.toString().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Icon(Icons.inventory_2_outlined, size: 13, color: Colors.grey.shade500),
-                    const SizedBox(width: 4),
-                    Text(
-                      qty != null ? '$material  ·  $qty units' : material.toString(),
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E)),
-                    ),
-                  ]),
-                ],
-                const SizedBox(height: 4),
-                Row(children: [
-                  if (distance != null) ...[
-                    Icon(Icons.straighten, size: 13, color: Colors.grey.shade400),
-                    const SizedBox(width: 4),
-                    Text('${distance}km', style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E))),
-                    const SizedBox(width: 10),
-                  ],
-                  Icon(Icons.calendar_today_outlined, size: 13, color: Colors.grey.shade400),
-                  const SizedBox(width: 4),
-                  Text(date, style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E))),
-                ]),
-                if (remarks.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(remarks, style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-                if (isStockMove) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('Stock Move', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF6A1B9A))),
-                  ),
-                ],
-              ])),
-              if (!isStockMove) _actionMenu(item),
             ]),
           ),
         );
@@ -309,43 +1062,81 @@ class _TransportScreenState extends State<TransportScreen> {
     );
   }
 
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
   Widget _typeBadge(bool isStockMove) {
+    final color = isStockMove ? _trpPurple : _trpTeal;
+    final bg = isStockMove
+        ? const Color(0xFFF3E5F5)
+        : const Color(0xFFCCFBF1);
+    final icon =
+        isStockMove ? Icons.swap_horiz_rounded : Icons.local_shipping_outlined;
+    final label = isStockMove ? 'Stock Move' : 'Delivery';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: isStockMove ? const Color(0xFFF3E5F5) : const Color(0xFFCCFBF1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        isStockMove ? 'Stock Move' : 'Delivery',
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isStockMove ? const Color(0xFF6A1B9A) : _trpTeal),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 10, color: color),
+        const SizedBox(width: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+      ]),
     );
   }
 
   Widget _actionMenu(Map item) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF9CA3AF)),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      elevation: 3,
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'edit', child: Row(children: [
-          Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
-          SizedBox(width: 8),
-          Text('Edit', style: TextStyle(fontSize: 13)),
-        ])),
-        PopupMenuItem(value: 'delete', child: Row(children: [
-          Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFDC2626)),
-          SizedBox(width: 8),
-          Text('Delete', style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-        ])),
-      ],
-      onSelected: (v) {
-        if (v == 'edit') _openForm(item);
-        if (v == 'delete') _delete(item['_id']);
-      },
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert_rounded,
+            size: 16, color: Color(0xFFB0BEC5)),
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 3,
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(children: [
+              Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
+              SizedBox(width: 8),
+              Text('Edit', style: TextStyle(fontSize: 13)),
+            ]),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(children: [
+              Icon(Icons.delete_outline_rounded,
+                  size: 15, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text('Delete',
+                  style:
+                      TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+            ]),
+          ),
+        ],
+        onSelected: (v) {
+          if (v == 'edit') _openForm(item);
+          if (v == 'delete') _delete(item['_id']);
+        },
+      ),
     );
   }
+}
+
+String _trpFmtShort(String? d) {
+  if (d == null) return '—';
+  final dt = DateTime.tryParse(d);
+  if (dt == null) return '—';
+  return DateFormat('dd MMM').format(dt.toLocal());
+}
+
+String _trpFmtYear(String? d) {
+  if (d == null) return '';
+  final dt = DateTime.tryParse(d);
+  if (dt == null) return '';
+  return DateFormat('yyyy').format(dt.toLocal());
 }
 
 // ── Slide-in Form Panel ───────────────────────────────────────────────────────
@@ -361,6 +1152,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
   final _formKey = GlobalKey<FormState>();
   List _locations = [], _materials = [];
   String? _fromLoc, _toLoc, _materialId;
+  final _transportNameCtrl = TextEditingController();
   final _vehicleCtrl = TextEditingController();
   final _driverCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController();
@@ -379,6 +1171,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
       _fromLoc = e['fromLocation']?['_id'];
       _toLoc = e['toLocation']?['_id'];
       _materialId = e['material']?['_id'];
+      _transportNameCtrl.text = e['transportName'] ?? '';
       _vehicleCtrl.text = e['vehicleNo'] ?? '';
       _driverCtrl.text = e['driverName'] ?? '';
       _qtyCtrl.text = '${e['quantity'] ?? ''}';
@@ -391,6 +1184,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
 
   @override
   void dispose() {
+    _transportNameCtrl.dispose();
     _vehicleCtrl.dispose(); _driverCtrl.dispose();
     _qtyCtrl.dispose(); _distCtrl.dispose();
     _costCtrl.dispose(); _remarksCtrl.dispose();
@@ -406,8 +1200,9 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final body = {
-      'vehicleNo': _vehicleCtrl.text,
-      'driverName': _driverCtrl.text,
+      'transportName': _transportNameCtrl.text.trim(),
+      'vehicleNo': _vehicleCtrl.text.trim(),
+      'driverName': _driverCtrl.text.trim(),
       'fromLocation': _fromLoc,
       'toLocation': _toLoc,
       'material': _materialId,
@@ -427,93 +1222,290 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
     if (mounted) setState(() => _saving = false);
   }
 
+  static const _primary = Color(0xFF1B3A27);
+  static const _accent = Color(0xFF2E7D52);
+
+  InputDecoration _dec(String label, IconData icon, {String? hint}) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, size: 18, color: _accent),
+        labelStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+        filled: true,
+        fillColor: const Color(0xFFF7F9F8),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFDDE3E0))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFDDE3E0))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _accent, width: 1.5)),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Colors.red)),
+        focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Colors.red, width: 1.5)),
+      );
+
+  Widget _sectionLabel(String text, IconData icon) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(children: [
+          Icon(icon, size: 13, color: _accent),
+          const SizedBox(width: 6),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF374151))),
+          const SizedBox(width: 8),
+          const Expanded(child: Divider(thickness: 1, color: Color(0xFFE5E7EB))),
+        ]),
+      );
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.item != null;
     return Column(children: [
+      // ── Drag handle ──────────────────────────────────────────────────────
+      const SizedBox(height: 10),
       Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF1B3A27), Color(0xFF1E6F5C)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        ),
-        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12, bottom: 18, left: 20, right: 8),
-        child: Row(children: [
-          const Icon(Icons.local_shipping_outlined, color: Colors.white70, size: 22),
-          const SizedBox(width: 10),
-          Expanded(child: Text(isEdit ? 'Edit Transport' : 'New Transport', style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600))),
-          IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => Navigator.of(context).pop()),
-        ]),
+        width: 36,
+        height: 4,
+        decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(2)),
       ),
-      Expanded(child: Form(
-        key: _formKey,
-        child: ListView(padding: const EdgeInsets.all(20), children: [
-          TextFormField(
-            controller: _vehicleCtrl,
-            decoration: const InputDecoration(labelText: 'Vehicle No', border: OutlineInputBorder()),
-            validator: (v) => v!.isEmpty ? 'Required' : null,
+      const SizedBox(height: 2),
+
+      // ── Gradient header card ─────────────────────────────────────────────
+      Container(
+        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [_primary, Color(0xFF1E6F5C)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _driverCtrl,
-            decoration: const InputDecoration(labelText: 'Driver Name', border: OutlineInputBorder()),
-            validator: (v) => v!.isEmpty ? 'Required' : null,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.local_shipping_outlined,
+                color: Colors.white, size: 20),
           ),
-          const SizedBox(height: 16),
-          AppDropdown<String>(
-            label: 'From Location',
-            value: _fromLoc,
-            items: _locations.map<DropdownMenuItem<String>>((l) => DropdownMenuItem(value: l['_id'], child: Text(l['name']))).toList(),
-            onChanged: (v) => setState(() => _fromLoc = v),
-            validator: (v) => v == null ? 'Required' : null,
-          ),
-          const SizedBox(height: 16),
-          AppDropdown<String>(
-            label: 'To Location',
-            value: _toLoc,
-            items: _locations.map<DropdownMenuItem<String>>((l) => DropdownMenuItem(value: l['_id'], child: Text(l['name']))).toList(),
-            onChanged: (v) => setState(() => _toLoc = v),
-            validator: (v) => v == null ? 'Required' : null,
-          ),
-          const SizedBox(height: 16),
-          AppDropdown<String>(
-            label: 'Material (Optional)',
-            value: _materialId,
-            items: _materials.map<DropdownMenuItem<String>>((m) => DropdownMenuItem(value: m['_id'], child: Text(m['name']))).toList(),
-            onChanged: (v) => setState(() => _materialId = v),
-          ),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: TextFormField(controller: _qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()))),
-            const SizedBox(width: 10),
-            Expanded(child: TextFormField(controller: _distCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Distance (km)', border: OutlineInputBorder()))),
-            const SizedBox(width: 10),
-            Expanded(child: TextFormField(controller: _costCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Cost (₹)', border: OutlineInputBorder()))),
-          ]),
-          const SizedBox(height: 16),
-          DatePickerField(label: 'Date', value: _date, onChanged: (d) => setState(() => _date = d)),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _remarksCtrl,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Remarks', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 28),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D52),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              Text(isEdit ? 'Edit Transport' : 'New Transport',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(
+                isEdit
+                    ? 'Update the transport entry below'
+                    : 'Fill in the transport details below',
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
               ),
-              child: _saving
-                  ? const ButtonLoader()
-                  : Text(isEdit ? 'Update Transport' : 'Save Transport'),
+            ]),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child:
+                  const Icon(Icons.close, color: Colors.white70, size: 16),
             ),
           ),
         ]),
-      )),
+      ),
+
+      // ── Form body ────────────────────────────────────────────────────────
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+          child: Form(
+            key: _formKey,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              // ── Transport / Vehicle ─────────────────────────────────────
+              _sectionLabel('Transport & Vehicle',
+                  Icons.local_shipping_outlined),
+              TextFormField(
+                controller: _transportNameCtrl,
+                decoration:
+                    _dec('Transport Name', Icons.business_outlined,
+                        hint: 'e.g. KPS Transport'),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _vehicleCtrl,
+                    decoration: _dec(
+                        'Vehicle No', Icons.directions_car_outlined),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Required' : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _driverCtrl,
+                    decoration: _dec(
+                        'Driver Name', Icons.person_outline_rounded),
+                    validator: (v) =>
+                        v!.trim().isEmpty ? 'Required' : null,
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── Route ───────────────────────────────────────────────────
+              _sectionLabel('Route', Icons.alt_route_outlined),
+              DropdownButtonFormField<String>(
+                key: ValueKey('from_$_fromLoc'),
+                initialValue: _fromLoc,
+                decoration:
+                    _dec('From Location', Icons.location_on_outlined),
+                style: const TextStyle(
+                    fontSize: 13, color: Color(0xFF1A1A2E)),
+                borderRadius: BorderRadius.circular(10),
+                isExpanded: true,
+                items: _locations
+                    .map<DropdownMenuItem<String>>((l) => DropdownMenuItem(
+                        value: l['_id'], child: Text(l['name'])))
+                    .toList(),
+                onChanged: (v) => setState(() => _fromLoc = v),
+                validator: (v) => v == null ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey('to_$_toLoc'),
+                initialValue: _toLoc,
+                decoration: _dec(
+                    'To Location', Icons.location_searching_outlined),
+                style: const TextStyle(
+                    fontSize: 13, color: Color(0xFF1A1A2E)),
+                borderRadius: BorderRadius.circular(10),
+                isExpanded: true,
+                items: _locations
+                    .map<DropdownMenuItem<String>>((l) => DropdownMenuItem(
+                        value: l['_id'], child: Text(l['name'])))
+                    .toList(),
+                onChanged: (v) => setState(() => _toLoc = v),
+                validator: (v) => v == null ? 'Required' : null,
+              ),
+              const SizedBox(height: 20),
+
+              // ── Material ─────────────────────────────────────────────────
+              _sectionLabel('Material (Optional)',
+                  Icons.inventory_2_outlined),
+              DropdownButtonFormField<String>(
+                key: ValueKey('mat_$_materialId'),
+                initialValue: _materialId,
+                decoration:
+                    _dec('Material', Icons.widgets_outlined),
+                style: const TextStyle(
+                    fontSize: 13, color: Color(0xFF1A1A2E)),
+                borderRadius: BorderRadius.circular(10),
+                isExpanded: true,
+                items: _materials
+                    .map<DropdownMenuItem<String>>((m) => DropdownMenuItem(
+                        value: m['_id'], child: Text(m['name'])))
+                    .toList(),
+                onChanged: (v) => setState(() => _materialId = v),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        _dec('Quantity', Icons.format_list_numbered_rounded),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _distCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: _dec('Distance (km)', Icons.route_outlined),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _costCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: _dec('Cost (₹)',
+                        Icons.currency_rupee_rounded),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── Date & Remarks ───────────────────────────────────────────
+              _sectionLabel('Date & Remarks',
+                  Icons.calendar_today_outlined),
+              DatePickerField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d)),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _remarksCtrl,
+                maxLines: 2,
+                decoration: _dec('Remarks', Icons.notes_rounded),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Save button ──────────────────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accent,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _saving
+                      ? const ButtonLoader()
+                      : Text(
+                          isEdit ? 'Update Transport' : 'Save Transport',
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
     ]);
   }
 }
