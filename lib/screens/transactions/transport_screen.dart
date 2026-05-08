@@ -58,7 +58,11 @@ class _TransportScreenState extends State<TransportScreen> {
       final d2 = DateTime.tryParse(b['date'] ?? '') ?? DateTime.now();
       return d2.compareTo(d1);
     });
-    if (mounted) setState(() { _items = all; _loading = false; });
+    if (mounted)
+      setState(() {
+        _items = all;
+        _loading = false;
+      });
   }
 
   Future<void> _delete(String id) async {
@@ -79,10 +83,13 @@ class _TransportScreenState extends State<TransportScreen> {
         _toDate = null;
       });
 
-  int get _activeFilters =>
-      [_typeFilter, _selTransport, _selMaterial, _fromDate, _toDate]
-          .where((e) => e != null)
-          .length;
+  int get _activeFilters => [
+        _typeFilter,
+        _selTransport,
+        _selMaterial,
+        _fromDate,
+        _toDate
+      ].where((e) => e != null).length;
 
   List get _filtered {
     final q = _search.toLowerCase().trim();
@@ -118,13 +125,13 @@ class _TransportScreenState extends State<TransportScreen> {
       final matchesTransport = _selTransport == null ||
           transportName == _selTransport!.toLowerCase();
 
-      final matchesMaterial = _selMaterial == null ||
-          material == _selMaterial!.toLowerCase();
+      final matchesMaterial =
+          _selMaterial == null || material == _selMaterial!.toLowerCase();
 
       final matchesFrom = _fromDate == null ||
           (itemDate != null && !itemDate.isBefore(_fromDate!));
-      final matchesTo = _toDate == null ||
-          (itemDate != null && !itemDate.isAfter(_toDate!));
+      final matchesTo =
+          _toDate == null || (itemDate != null && !itemDate.isAfter(_toDate!));
 
       return matchesSearch &&
           matchesType &&
@@ -187,7 +194,10 @@ class _TransportScreenState extends State<TransportScreen> {
             onAdd: () => _openForm(),
             addLabel: 'Add Transport',
           ),
-          _buildFilterBar(results.length),
+          _buildFilterBar(
+              results.length,
+              results.fold<double>(
+                  0, (s, e) => s + (e['cost'] as num? ?? 0).toDouble())),
           Expanded(
             child: _loading
                 ? const AppLoader()
@@ -218,7 +228,7 @@ class _TransportScreenState extends State<TransportScreen> {
 
   // ── Filter Bar ──────────────────────────────────────────────────────────────
 
-  Widget _buildFilterBar(int count) {
+  Widget _buildFilterBar(int count, double totalCost) {
     final hasFilters = _activeFilters > 0;
     return Container(
       decoration: BoxDecoration(
@@ -269,6 +279,32 @@ class _TransportScreenState extends State<TransportScreen> {
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF64748B))),
             ),
+            if (totalCost > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(255, 202, 5, 5)
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: const Color.fromARGB(255, 99, 3, 3)
+                          .withValues(alpha: 0.3)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.currency_rupee_rounded,
+                      size: 10, color: _trpTeal),
+                  Text(
+                    _trpFmtAmount(totalCost, symbol: false),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _trpTeal),
+                  ),
+                ]),
+              ),
+            ],
             if (hasFilters) ...[
               const SizedBox(width: 8),
               InkWell(
@@ -387,8 +423,7 @@ class _TransportScreenState extends State<TransportScreen> {
           initialDate: value ?? DateTime.now(),
           builder: (ctx, child) => Theme(
             data: Theme.of(ctx).copyWith(
-              colorScheme:
-                  const ColorScheme.light(primary: _trpTeal),
+              colorScheme: const ColorScheme.light(primary: _trpTeal),
             ),
             child: child!,
           ),
@@ -399,9 +434,7 @@ class _TransportScreenState extends State<TransportScreen> {
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: active
-              ? const Color(0xFFCCFBF1)
-              : const Color(0xFFF8FAFC),
+          color: active ? const Color(0xFFCCFBF1) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
               color: active
@@ -450,7 +483,9 @@ class _TransportScreenState extends State<TransportScreen> {
         color: active ? const Color(0xFFCCFBF1) : const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color: active ? _trpTeal.withValues(alpha: 0.5) : const Color(0xFFE2E8F0),
+            color: active
+                ? _trpTeal.withValues(alpha: 0.5)
+                : const Color(0xFFE2E8F0),
             width: 1.2),
       ),
       child: DropdownButtonHideUnderline(
@@ -472,7 +507,8 @@ class _TransportScreenState extends State<TransportScreen> {
               Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
               const SizedBox(width: 6),
               Text(hint,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
             ]),
             ...items.map((e) => Row(children: [
                   Icon(icon, size: 13, color: _trpTeal),
@@ -491,7 +527,8 @@ class _TransportScreenState extends State<TransportScreen> {
             DropdownMenuItem<String>(
               value: null,
               child: Text('All $hint',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  style:
+                      const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
             ),
             ...items.map((e) => DropdownMenuItem(
                   value: e,
@@ -539,7 +576,9 @@ class _TransportScreenState extends State<TransportScreen> {
           Expanded(flex: 3, child: Text('VEHICLE / DRIVER', style: hdr)),
           Expanded(flex: 4, child: Text('ROUTE', style: hdr)),
           Expanded(flex: 3, child: Text('MATERIAL', style: hdr)),
-          SizedBox(width: 90, child: Text('COST', style: hdr, textAlign: TextAlign.center)),
+          SizedBox(
+              width: 90,
+              child: Text('COST', style: hdr, textAlign: TextAlign.center)),
           SizedBox(width: 110, child: Text('DATE', style: hdr)),
           SizedBox(width: 36),
         ]),
@@ -563,8 +602,7 @@ class _TransportScreenState extends State<TransportScreen> {
             final to = isStockMove
                 ? (item['toBranch']?['name'] ?? '—')
                 : (item['toLocation']?['name'] ?? '—');
-            final material =
-                (item['material']?['name'] ?? '—').toString();
+            final material = (item['material']?['name'] ?? '—').toString();
             final qty = item['quantity'];
             final cost = item['cost'];
             final dateStr = item['date'] as String?;
@@ -590,209 +628,208 @@ class _TransportScreenState extends State<TransportScreen> {
                   child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                    // Accent strip
-                    Container(
-                      width: 4,
-                      decoration: BoxDecoration(
-                        color: accent,
-                        borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(10),
-                            bottomLeft: Radius.circular(10)),
-                      ),
-                    ),
-                    // Index
-                    SizedBox(
-                      width: 32,
-                      child: Center(
-                        child: Text('${i + 1}',
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFCBD5E1))),
-                      ),
-                    ),
-                    // TYPE
-                    SizedBox(
-                      width: 112,
-                      child: Center(child: _typeBadge(isStockMove)),
-                    ),
-                    // VEHICLE / DRIVER
-                    Expanded(
-                      flex: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(7),
-                                ),
-                                child: Icon(Icons.directions_car_outlined,
-                                    size: 14, color: accent),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(vehicleNo.toString(),
+                        // Accent strip
+                        Container(
+                          width: 4,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(10),
+                                bottomLeft: Radius.circular(10)),
+                          ),
+                        ),
+                        // Index
+                        SizedBox(
+                          width: 32,
+                          child: Center(
+                            child: Text('${i + 1}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFCBD5E1))),
+                          ),
+                        ),
+                        // TYPE
+                        SizedBox(
+                          width: 112,
+                          child: Center(child: _typeBadge(isStockMove)),
+                        ),
+                        // VEHICLE / DRIVER
+                        Expanded(
+                          flex: 3,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Row(children: [
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                    child: Icon(Icons.directions_car_outlined,
+                                        size: 14, color: accent),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(vehicleNo.toString(),
+                                        style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF1E293B)),
+                                        overflow: TextOverflow.ellipsis),
+                                  ),
+                                ]),
+                                if (driver != '—') ...[
+                                  const SizedBox(height: 2),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 36),
+                                    child: Text(driver,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF94A3B8)),
+                                        overflow: TextOverflow.ellipsis),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        // ROUTE
+                        Expanded(
+                          flex: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 4),
+                            child: Row(children: [
+                              const Icon(Icons.location_on_outlined,
+                                  size: 13, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(from.toString(),
                                     style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF1E293B)),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF374151)),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text('→',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: accent)),
+                                ),
+                              ),
+                              Flexible(
+                                child: Text(to.toString(),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF374151)),
                                     overflow: TextOverflow.ellipsis),
                               ),
                             ]),
-                            if (driver != '—') ...[
-                              const SizedBox(height: 2),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 36),
-                                child: Text(driver,
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF94A3B8)),
-                                    overflow: TextOverflow.ellipsis),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    // ROUTE
-                    Expanded(
-                      flex: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 4),
-                        child: Row(children: [
-                          const Icon(Icons.location_on_outlined,
-                              size: 13, color: Color(0xFF94A3B8)),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(from.toString(),
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF374151)),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text('→',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: accent)),
-                            ),
-                          ),
-                          Flexible(
-                            child: Text(to.toString(),
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF374151)),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                        ]),
-                      ),
-                    ),
-                    // MATERIAL
-                    Expanded(
-                      flex: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(material,
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF374151)),
-                                overflow: TextOverflow.ellipsis),
-                            if (qty != null)
-                              Text('Qty: $qty',
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xFF94A3B8))),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // COST
-                    SizedBox(
-                      width: 90,
-                      child: Center(
-                        child: cost != null
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _trpTeal.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color:
-                                          _trpTeal.withValues(alpha: 0.2)),
-                                ),
-                                child: Text('₹$cost',
+                        // MATERIAL
+                        Expanded(
+                          flex: 3,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 4),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(material,
                                     style: const TextStyle(
                                         fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: _trpTeal)),
-                              )
-                            : const Text('—',
-                                style: TextStyle(
-                                    color: Color(0xFFE2E8F0),
-                                    fontSize: 16)),
-                      ),
-                    ),
-                    // DATE
-                    SizedBox(
-                      width: 110,
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _trpFmtShort(dateStr),
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151)),
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF374151)),
+                                    overflow: TextOverflow.ellipsis),
+                                if (qty != null)
+                                  Text('Qty: $qty',
+                                      style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Color(0xFF94A3B8))),
+                              ],
                             ),
-                            Text(
-                              _trpFmtYear(dateStr),
-                              style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF94A3B8)),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    // ACTIONS
-                    SizedBox(
-                      width: 36,
-                      child: Center(
-                        child: isStockMove
-                            ? const SizedBox.shrink()
-                            : _actionMenu(item),
-                      ),
-                    ),
-                  ]),
+                        // COST
+                        SizedBox(
+                          width: 90,
+                          child: Center(
+                            child: cost != null
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _trpTeal.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color:
+                                              _trpTeal.withValues(alpha: 0.2)),
+                                    ),
+                                    child: Text(_trpFmtAmount(cost is num ? cost : null),
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: _trpTeal)),
+                                  )
+                                : const Text('—',
+                                    style: TextStyle(
+                                        color: Color(0xFFE2E8F0),
+                                        fontSize: 16)),
+                          ),
+                        ),
+                        // DATE
+                        SizedBox(
+                          width: 110,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  _trpFmtShort(dateStr),
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF374151)),
+                                ),
+                                Text(
+                                  _trpFmtYear(dateStr),
+                                  style: const TextStyle(
+                                      fontSize: 10, color: Color(0xFF94A3B8)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // ACTIONS
+                        SizedBox(
+                          width: 36,
+                          child: Center(
+                            child: isStockMove
+                                ? const SizedBox.shrink()
+                                : _actionMenu(item),
+                          ),
+                        ),
+                      ]),
                 ),
               ),
             );
@@ -846,9 +883,8 @@ class _TransportScreenState extends State<TransportScreen> {
           ),
           clipBehavior: Clip.antiAlias,
           child: IntrinsicHeight(
-            child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+            child:
+                Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               // Accent strip
               Container(width: 4, color: accent),
 
@@ -923,7 +959,7 @@ class _TransportScreenState extends State<TransportScreen> {
                               border: Border.all(
                                   color: _trpTeal.withValues(alpha: 0.2)),
                             ),
-                            child: Text('₹$cost',
+                            child: Text(_trpFmtAmount(cost is num ? cost : null),
                                 style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
@@ -956,8 +992,7 @@ class _TransportScreenState extends State<TransportScreen> {
                                 overflow: TextOverflow.ellipsis),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
@@ -1011,12 +1046,9 @@ class _TransportScreenState extends State<TransportScreen> {
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                  qty != null
-                                      ? '$material · $qty'
-                                      : material,
+                                  qty != null ? '$material · $qty' : material,
                                   style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF64748B)),
+                                      fontSize: 11, color: Color(0xFF64748B)),
                                   overflow: TextOverflow.ellipsis),
                             ),
                           ],
@@ -1027,8 +1059,7 @@ class _TransportScreenState extends State<TransportScreen> {
                             const SizedBox(width: 4),
                             Text('${distance}km',
                                 style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF64748B))),
+                                    fontSize: 11, color: Color(0xFF64748B))),
                           ],
                         ]),
                       ],
@@ -1066,15 +1097,14 @@ class _TransportScreenState extends State<TransportScreen> {
 
   Widget _typeBadge(bool isStockMove) {
     final color = isStockMove ? _trpPurple : _trpTeal;
-    final bg = isStockMove
-        ? const Color(0xFFF3E5F5)
-        : const Color(0xFFCCFBF1);
+    final bg = isStockMove ? const Color(0xFFF3E5F5) : const Color(0xFFCCFBF1);
     final icon =
         isStockMove ? Icons.swap_horiz_rounded : Icons.local_shipping_outlined;
     final label = isStockMove ? 'Stock Move' : 'Delivery';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 10, color: color),
         const SizedBox(width: 4),
@@ -1111,8 +1141,7 @@ class _TransportScreenState extends State<TransportScreen> {
                   size: 15, color: Color(0xFFDC2626)),
               SizedBox(width: 8),
               Text('Delete',
-                  style:
-                      TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+                  style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
             ]),
           ),
         ],
@@ -1123,6 +1152,12 @@ class _TransportScreenState extends State<TransportScreen> {
       ),
     );
   }
+}
+
+String _trpFmtAmount(num? v, {bool symbol = true}) {
+  if (v == null) return '—';
+  final fmt = NumberFormat('#,##,###.##', 'en_IN');
+  return symbol ? '₹${fmt.format(v)}' : fmt.format(v);
 }
 
 String _trpFmtShort(String? d) {
@@ -1185,15 +1220,23 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
   @override
   void dispose() {
     _transportNameCtrl.dispose();
-    _vehicleCtrl.dispose(); _driverCtrl.dispose();
-    _qtyCtrl.dispose(); _distCtrl.dispose();
-    _costCtrl.dispose(); _remarksCtrl.dispose();
+    _vehicleCtrl.dispose();
+    _driverCtrl.dispose();
+    _qtyCtrl.dispose();
+    _distCtrl.dispose();
+    _costCtrl.dispose();
+    _remarksCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadDropdowns() async {
-    final [lRes, mRes] = await Future.wait([ApiService.get('/locations'), ApiService.get('/materials')]);
-    if (mounted) setState(() { _locations = lRes['data'] ?? []; _materials = mRes['data'] ?? []; });
+    final [lRes, mRes] = await Future.wait(
+        [ApiService.get('/locations'), ApiService.get('/materials')]);
+    if (mounted)
+      setState(() {
+        _locations = lRes['data'] ?? [];
+        _materials = mRes['data'] ?? [];
+      });
   }
 
   Future<void> _save() async {
@@ -1216,7 +1259,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
         ? await ApiService.post('/transport', body)
         : await ApiService.put('/transport/${widget.item!['_id']}', body);
     if (mounted) {
-      showSnack(context, res['success'] == true ? 'Saved!' : res['message'], error: res['success'] != true);
+      showSnack(context, res['success'] == true ? 'Saved!' : res['message'],
+          error: res['success'] != true);
       if (res['success'] == true) widget.onSaved();
     }
     if (mounted) setState(() => _saving = false);
@@ -1263,7 +1307,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF374151))),
           const SizedBox(width: 8),
-          const Expanded(child: Divider(thickness: 1, color: Color(0xFFE5E7EB))),
+          const Expanded(
+              child: Divider(thickness: 1, color: Color(0xFFE5E7EB))),
         ]),
       );
 
@@ -1307,8 +1352,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(isEdit ? 'Edit Transport' : 'New Transport',
                   style: const TextStyle(
                       color: Colors.white,
@@ -1332,8 +1377,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
                 color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child:
-                  const Icon(Icons.close, color: Colors.white70, size: 16),
+              child: const Icon(Icons.close, color: Colors.white70, size: 16),
             ),
           ),
         ]),
@@ -1345,36 +1389,33 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
           child: Form(
             key: _formKey,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // ── Transport / Vehicle ─────────────────────────────────────
-              _sectionLabel('Transport & Vehicle',
-                  Icons.local_shipping_outlined),
+              _sectionLabel(
+                  'Transport & Vehicle', Icons.local_shipping_outlined),
               TextFormField(
                 controller: _transportNameCtrl,
-                decoration:
-                    _dec('Transport Name', Icons.business_outlined,
-                        hint: 'e.g. KPS Transport'),
+                decoration: _dec('Transport Name', Icons.business_outlined,
+                    hint: 'e.g. KPS Transport'),
               ),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
                   child: TextFormField(
                     controller: _vehicleCtrl,
-                    decoration: _dec(
-                        'Vehicle No', Icons.directions_car_outlined),
-                    validator: (v) =>
-                        v!.trim().isEmpty ? 'Required' : null,
+                    decoration:
+                        _dec('Vehicle No', Icons.directions_car_outlined),
+                    validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
                     controller: _driverCtrl,
-                    decoration: _dec(
-                        'Driver Name', Icons.person_outline_rounded),
-                    validator: (v) =>
-                        v!.trim().isEmpty ? 'Required' : null,
+                    decoration:
+                        _dec('Driver Name', Icons.person_outline_rounded),
+                    validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                   ),
                 ),
               ]),
@@ -1385,10 +1426,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
               DropdownButtonFormField<String>(
                 key: ValueKey('from_$_fromLoc'),
                 initialValue: _fromLoc,
-                decoration:
-                    _dec('From Location', Icons.location_on_outlined),
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF1A1A2E)),
+                decoration: _dec('From Location', Icons.location_on_outlined),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
                 isExpanded: true,
                 items: _locations
@@ -1402,10 +1441,9 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
               DropdownButtonFormField<String>(
                 key: ValueKey('to_$_toLoc'),
                 initialValue: _toLoc,
-                decoration: _dec(
-                    'To Location', Icons.location_searching_outlined),
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF1A1A2E)),
+                decoration:
+                    _dec('To Location', Icons.location_searching_outlined),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
                 isExpanded: true,
                 items: _locations
@@ -1418,15 +1456,12 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
               const SizedBox(height: 20),
 
               // ── Material ─────────────────────────────────────────────────
-              _sectionLabel('Material (Optional)',
-                  Icons.inventory_2_outlined),
+              _sectionLabel('Material (Optional)', Icons.inventory_2_outlined),
               DropdownButtonFormField<String>(
                 key: ValueKey('mat_$_materialId'),
                 initialValue: _materialId,
-                decoration:
-                    _dec('Material', Icons.widgets_outlined),
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF1A1A2E)),
+                decoration: _dec('Material', Icons.widgets_outlined),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
                 isExpanded: true,
                 items: _materials
@@ -1458,16 +1493,14 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
                   child: TextFormField(
                     controller: _costCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: _dec('Cost (₹)',
-                        Icons.currency_rupee_rounded),
+                    decoration: _dec('Cost (₹)', Icons.currency_rupee_rounded),
                   ),
                 ),
               ]),
               const SizedBox(height: 20),
 
               // ── Date & Remarks ───────────────────────────────────────────
-              _sectionLabel('Date & Remarks',
-                  Icons.calendar_today_outlined),
+              _sectionLabel('Date & Remarks', Icons.calendar_today_outlined),
               DatePickerField(
                   label: 'Date',
                   value: _date,
@@ -1524,19 +1557,27 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     final res = await ApiService.get('/measurements');
-    if (mounted) setState(() { _items = res['data'] ?? []; _loading = false; });
+    if (mounted)
+      setState(() {
+        _items = res['data'] ?? [];
+        _loading = false;
+      });
   }
 
   Future<void> _delete(String id) async {
     if (!await confirmDelete(context)) return;
     final res = await ApiService.delete('/measurements/$id');
     if (mounted) {
-      showSnack(context, res['success'] == true ? 'Deleted' : res['message'], error: res['success'] != true);
+      showSnack(context, res['success'] == true ? 'Deleted' : res['message'],
+          error: res['success'] != true);
       if (res['success'] == true) _load();
     }
   }
@@ -1549,7 +1590,8 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
       ]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const MeasurementFormScreen()));
+          await Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const MeasurementFormScreen()));
           _load();
         },
         icon: const Icon(Icons.add),
@@ -1558,7 +1600,8 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
       body: _loading
           ? const AppLoader()
           : _items.isEmpty
-              ? const EmptyState(message: 'No measurements', icon: Icons.straighten)
+              ? const EmptyState(
+                  message: 'No measurements', icon: Icons.straighten)
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
@@ -1567,36 +1610,57 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                     itemBuilder: (_, i) {
                       final item = _items[i];
                       final date = item['date'] != null
-                          ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+                          ? DateFormat('dd MMM yyyy')
+                              .format(DateTime.parse(item['date']))
                           : '—';
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
                         child: ListTile(
                           leading: CircleAvatar(
                               backgroundColor: Colors.indigo.shade50,
-                              child: Icon(Icons.straighten, color: Colors.indigo.shade700)),
-                          title: Text(item['material']?['name'] ?? '—', style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text('${item['branch']?['name'] ?? '—'} · $date\nQty: ${item['quantity']} ${item['unit'] ?? ''}'),
+                              child: Icon(Icons.straighten,
+                                  color: Colors.indigo.shade700)),
+                          title: Text(item['material']?['name'] ?? '—',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                              '${item['branch']?['name'] ?? '—'} · $date\nQty: ${item['quantity']} ${item['unit'] ?? ''}'),
                           isThreeLine: true,
                           trailing: PopupMenuButton(
-                            icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF9CA3AF)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            icon: const Icon(Icons.more_horiz_rounded,
+                                size: 18, color: Color(0xFF9CA3AF)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                             elevation: 3,
                             itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Row(children: [
-                                Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
-                                SizedBox(width: 8),
-                                Text('Edit', style: TextStyle(fontSize: 13)),
-                              ])),
-                              PopupMenuItem(value: 'delete', child: Row(children: [
-                                Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFDC2626)),
-                                SizedBox(width: 8),
-                                Text('Delete', style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-                              ])),
+                              PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(children: [
+                                    Icon(Icons.edit_outlined,
+                                        size: 15, color: Color(0xFF374151)),
+                                    SizedBox(width: 8),
+                                    Text('Edit',
+                                        style: TextStyle(fontSize: 13)),
+                                  ])),
+                              PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(children: [
+                                    Icon(Icons.delete_outline_rounded,
+                                        size: 15, color: Color(0xFFDC2626)),
+                                    SizedBox(width: 8),
+                                    Text('Delete',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: Color(0xFFDC2626))),
+                                  ])),
                             ],
                             onSelected: (v) async {
                               if (v == 'edit') {
-                                await Navigator.push(context, MaterialPageRoute(builder: (_) => MeasurementFormScreen(item: item)));
+                                await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            MeasurementFormScreen(item: item)));
                                 _load();
                               } else {
                                 _delete(item['_id']);
@@ -1651,14 +1715,22 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
 
   @override
   void dispose() {
-    _lenCtrl.dispose(); _breCtrl.dispose(); _heiCtrl.dispose();
-    _qtyCtrl.dispose(); _descCtrl.dispose();
+    _lenCtrl.dispose();
+    _breCtrl.dispose();
+    _heiCtrl.dispose();
+    _qtyCtrl.dispose();
+    _descCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadDropdowns() async {
-    final [bRes, mRes] = await Future.wait([ApiService.get('/branches'), ApiService.get('/materials')]);
-    if (mounted) setState(() { _branches = bRes['data'] ?? []; _materials = mRes['data'] ?? []; });
+    final [bRes, mRes] = await Future.wait(
+        [ApiService.get('/branches'), ApiService.get('/materials')]);
+    if (mounted)
+      setState(() {
+        _branches = bRes['data'] ?? [];
+        _materials = mRes['data'] ?? [];
+      });
   }
 
   Future<void> _save() async {
@@ -1679,7 +1751,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         ? await ApiService.post('/measurements', body)
         : await ApiService.put('/measurements/${widget.item!['_id']}', body);
     if (mounted) {
-      showSnack(context, res['success'] == true ? 'Saved!' : res['message'], error: res['success'] != true);
+      showSnack(context, res['success'] == true ? 'Saved!' : res['message'],
+          error: res['success'] != true);
       if (res['success'] == true) Navigator.pop(context);
     }
     if (mounted) setState(() => _saving = false);
@@ -1688,57 +1761,87 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item == null ? 'Add Measurement' : 'Edit Measurement')),
+      appBar: AppBar(
+          title: Text(
+              widget.item == null ? 'Add Measurement' : 'Edit Measurement')),
       body: Form(
         key: _formKey,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           AppDropdown<String>(
               label: 'Branch',
               value: _branchId,
-              items: _branches.map<DropdownMenuItem<String>>((b) => DropdownMenuItem(value: b['_id'], child: Text(b['name']))).toList(),
+              items: _branches
+                  .map<DropdownMenuItem<String>>((b) =>
+                      DropdownMenuItem(value: b['_id'], child: Text(b['name'])))
+                  .toList(),
               onChanged: (v) => setState(() => _branchId = v),
               validator: (v) => v == null ? 'Required' : null),
           const SizedBox(height: 16),
           AppDropdown<String>(
               label: 'Material',
               value: _materialId,
-              items: _materials.map<DropdownMenuItem<String>>((m) => DropdownMenuItem(value: m['_id'], child: Text(m['name']))).toList(),
+              items: _materials
+                  .map<DropdownMenuItem<String>>((m) =>
+                      DropdownMenuItem(value: m['_id'], child: Text(m['name'])))
+                  .toList(),
               onChanged: (v) => setState(() => _materialId = v),
               validator: (v) => v == null ? 'Required' : null),
           const SizedBox(height: 16),
           Row(children: [
-            Expanded(child: TextFormField(controller: _lenCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Length'))),
+            Expanded(
+                child: TextFormField(
+                    controller: _lenCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Length'))),
             const SizedBox(width: 8),
-            Expanded(child: TextFormField(controller: _breCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Breadth'))),
+            Expanded(
+                child: TextFormField(
+                    controller: _breCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Breadth'))),
             const SizedBox(width: 8),
-            Expanded(child: TextFormField(controller: _heiCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Height'))),
+            Expanded(
+                child: TextFormField(
+                    controller: _heiCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Height'))),
           ]),
           const SizedBox(height: 16),
           Row(children: [
-            Expanded(child: TextFormField(controller: _qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantity'), validator: (v) => v!.isEmpty ? 'Required' : null)),
+            Expanded(
+                child: TextFormField(
+                    controller: _qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Quantity'),
+                    validator: (v) => v!.isEmpty ? 'Required' : null)),
             const SizedBox(width: 12),
-            Expanded(child: AppDropdown<String>(
-                label: 'Unit',
-                value: _unit,
-                items: const [
-                  DropdownMenuItem(value: 'sqft', child: Text('sq ft')),
-                  DropdownMenuItem(value: 'sqm', child: Text('sq m')),
-                  DropdownMenuItem(value: 'rft', child: Text('rft')),
-                  DropdownMenuItem(value: 'cum', child: Text('cu m')),
-                  DropdownMenuItem(value: 'nos', child: Text('nos')),
-                ],
-                onChanged: (v) => setState(() => _unit = v))),
+            Expanded(
+                child: AppDropdown<String>(
+                    label: 'Unit',
+                    value: _unit,
+                    items: const [
+                      DropdownMenuItem(value: 'sqft', child: Text('sq ft')),
+                      DropdownMenuItem(value: 'sqm', child: Text('sq m')),
+                      DropdownMenuItem(value: 'rft', child: Text('rft')),
+                      DropdownMenuItem(value: 'cum', child: Text('cu m')),
+                      DropdownMenuItem(value: 'nos', child: Text('nos')),
+                    ],
+                    onChanged: (v) => setState(() => _unit = v))),
           ]),
           const SizedBox(height: 16),
-          DatePickerField(label: 'Date', value: _date, onChanged: (d) => setState(() => _date = d)),
+          DatePickerField(
+              label: 'Date',
+              value: _date,
+              onChanged: (d) => setState(() => _date = d)),
           const SizedBox(height: 16),
-          TextFormField(controller: _descCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Description')),
+          TextFormField(
+              controller: _descCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Description')),
           const SizedBox(height: 24),
           ElevatedButton(
               onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const ButtonLoader()
-                  : const Text('Save')),
+              child: _saving ? const ButtonLoader() : const Text('Save')),
         ]),
       ),
     );
