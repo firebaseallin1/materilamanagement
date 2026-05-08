@@ -25,6 +25,7 @@ class _TransportScreenState extends State<TransportScreen> {
   String? _typeFilter; // null = all | 'delivery' | 'stock_move'
   String? _selTransport;
   String? _selMaterial;
+  String? _selBranch;
   DateTime? _fromDate;
   DateTime? _toDate;
 
@@ -79,6 +80,7 @@ class _TransportScreenState extends State<TransportScreen> {
         _typeFilter = null;
         _selTransport = null;
         _selMaterial = null;
+        _selBranch = null;
         _fromDate = null;
         _toDate = null;
       });
@@ -87,8 +89,9 @@ class _TransportScreenState extends State<TransportScreen> {
         _typeFilter,
         _selTransport,
         _selMaterial,
+        _selBranch,
         _fromDate,
-        _toDate
+        _toDate,
       ].where((e) => e != null).length;
 
   List get _filtered {
@@ -111,6 +114,11 @@ class _TransportScreenState extends State<TransportScreen> {
       final transportName =
           (item['transportName'] ?? '').toString().toLowerCase();
 
+      final fromBranch =
+          (item['fromBranch']?['name'] ?? '').toString().toLowerCase();
+      final toBranch =
+          (item['toBranch']?['name'] ?? '').toString().toLowerCase();
+
       final matchesSearch = q.isEmpty ||
           vehicle.contains(q) ||
           driver.contains(q) ||
@@ -128,6 +136,11 @@ class _TransportScreenState extends State<TransportScreen> {
       final matchesMaterial =
           _selMaterial == null || material == _selMaterial!.toLowerCase();
 
+      final selBranchLower = _selBranch?.toLowerCase();
+      final matchesBranch = selBranchLower == null ||
+          fromBranch == selBranchLower ||
+          toBranch == selBranchLower;
+
       final matchesFrom = _fromDate == null ||
           (itemDate != null && !itemDate.isBefore(_fromDate!));
       final matchesTo =
@@ -137,6 +150,7 @@ class _TransportScreenState extends State<TransportScreen> {
           matchesType &&
           matchesTransport &&
           matchesMaterial &&
+          matchesBranch &&
           matchesFrom &&
           matchesTo;
     }).toList();
@@ -349,6 +363,23 @@ class _TransportScreenState extends State<TransportScreen> {
             ],
           ),
         ),
+        // const SizedBox(height: 8),
+
+        // // In / Out chips
+        // SizedBox(
+        //   height: 32,
+        //   child: ListView(
+        //     scrollDirection: Axis.horizontal,
+        //     padding: const EdgeInsets.symmetric(horizontal: 14),
+        //     children: [
+        //       _inOutChip(null, 'All', Icons.swap_vert_rounded),
+        //       const SizedBox(width: 6),
+        //       _inOutChip('in', 'In', Icons.south_rounded),
+        //       const SizedBox(width: 6),
+        //       _inOutChip('out', 'Out', Icons.north_rounded),
+        //     ],
+        //   ),
+        // ),
         const SizedBox(height: 10),
 
         // Dropdowns + date row
@@ -362,6 +393,14 @@ class _TransportScreenState extends State<TransportScreen> {
               value: _selTransport,
               items: _getTransports(),
               onChanged: (v) => setState(() => _selTransport = v),
+            ),
+            const SizedBox(width: 8),
+            _filterDropdown(
+              icon: Icons.account_tree_outlined,
+              hint: 'Branch',
+              value: _selBranch,
+              items: _getBranches(),
+              onChanged: (v) => setState(() => _selBranch = v),
             ),
             const SizedBox(width: 8),
             _filterDropdown(
@@ -410,6 +449,36 @@ class _TransportScreenState extends State<TransportScreen> {
       ),
     );
   }
+
+  // Widget _inOutChip(String? type, String label, IconData icon) {
+  //   final selected = _inOutFilter == type;
+  //   final Color accent =
+  //       type == 'in' ? const Color(0xFF059669) : type == 'out' ? const Color(0xFFDC2626) : _trpTeal;
+  //   return GestureDetector(
+  //     onTap: () => setState(() => _inOutFilter = type),
+  //     child: AnimatedContainer(
+  //       duration: const Duration(milliseconds: 150),
+  //       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  //       decoration: BoxDecoration(
+  //         color: selected ? accent : const Color(0xFFF8FAFC),
+  //         borderRadius: BorderRadius.circular(20),
+  //         border: Border.all(
+  //             color: selected ? accent : const Color(0xFFE2E8F0), width: 1.2),
+  //       ),
+  //       child: Row(mainAxisSize: MainAxisSize.min, children: [
+  //         Icon(icon,
+  //             size: 12,
+  //             color: selected ? Colors.white : const Color(0xFF64748B)),
+  //         const SizedBox(width: 5),
+  //         Text(label,
+  //             style: TextStyle(
+  //                 fontSize: 12,
+  //                 fontWeight: FontWeight.w600,
+  //                 color: selected ? Colors.white : const Color(0xFF475569))),
+  //       ]),
+  //     ),
+  //   );
+  // }
 
   Widget _datePill(String label, DateTime? value, Function(DateTime) onPick,
       VoidCallback onClear) {
@@ -549,6 +618,17 @@ class _TransportScreenState extends State<TransportScreen> {
       .toSet()
       .toList()
     ..sort();
+
+  List<String> _getBranches() {
+    final names = <String>{};
+    for (final item in _items) {
+      final fb = item['fromBranch']?['name']?.toString();
+      final tb = item['toBranch']?['name']?.toString();
+      if (fb != null && fb.isNotEmpty) names.add(fb);
+      if (tb != null && tb.isNotEmpty) names.add(tb);
+    }
+    return names.toList()..sort();
+  }
 
   List<String> _getMaterials() => _items
       .map((e) => (e['material'] as Map?)?['name']?.toString() ?? '')
@@ -785,7 +865,9 @@ class _TransportScreenState extends State<TransportScreen> {
                                           color:
                                               _trpTeal.withValues(alpha: 0.2)),
                                     ),
-                                    child: Text(_trpFmtAmount(cost is num ? cost : null),
+                                    child: Text(
+                                        _trpFmtAmount(
+                                            cost is num ? cost : null),
                                         style: const TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
@@ -959,7 +1041,8 @@ class _TransportScreenState extends State<TransportScreen> {
                               border: Border.all(
                                   color: _trpTeal.withValues(alpha: 0.2)),
                             ),
-                            child: Text(_trpFmtAmount(cost is num ? cost : null),
+                            child: Text(
+                                _trpFmtAmount(cost is num ? cost : null),
                                 style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
