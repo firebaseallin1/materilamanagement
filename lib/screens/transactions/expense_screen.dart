@@ -245,7 +245,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               onAdd: () => _openForm(),
               addLabel: 'Add Expense',
             ),
-            if (!isMobile) _buildTabBar(),
+            _buildTabBar(isMobile),
             _buildToolbar(isMobile, rows.length, total),
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
@@ -265,38 +265,60 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   // ── Tab bar ──────────────────────────────────────────────────────────────────
 
-  Widget _buildTabBar() {
-    const tabs = ['All Expenses', 'This Month', 'This Year'];
+  Widget _buildTabBar(bool isMobile) {
+    const tabs = ['All', 'This Month', 'This Year'];
+    const tabsFull = ['All Expenses', 'This Month', 'This Year'];
+    if (isMobile) {
+      return Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+        child: Row(children: List.generate(tabs.length, (i) {
+          final active = _tabIndex == i;
+          return Expanded(child: GestureDetector(
+            onTap: () => setState(() => _tabIndex = i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: EdgeInsets.only(right: i < tabs.length - 1 ? 6 : 0),
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              decoration: BoxDecoration(
+                color: active ? _expAccent.withValues(alpha: 0.1) : const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: active ? _expAccent : const Color(0xFFE5E7EB)),
+              ),
+              child: Center(child: Text(tabs[i],
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                      color: active ? _expAccent : const Color(0xFF6B7280)))),
+            ),
+          ));
+        })),
+      );
+    }
     return Container(
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB)))),
-      child: Row(
-        children: List.generate(tabs.length, (i) {
-          final active = _tabIndex == i;
-          return GestureDetector(
-            onTap: () => setState(() => _tabIndex = i),
-            child: Container(
-              margin: const EdgeInsets.only(right: 24),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: active ? _expAccent : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-              ),
-              child: Text(tabs[i],
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                      color: active ? _expAccent : const Color(0xFF6B7280))),
+      child: Row(children: List.generate(tabsFull.length, (i) {
+        final active = _tabIndex == i;
+        return GestureDetector(
+          onTap: () => setState(() => _tabIndex = i),
+          child: Container(
+            margin: const EdgeInsets.only(right: 24),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(
+                color: active ? _expAccent : Colors.transparent, width: 2)),
             ),
-          );
-        }),
-      ),
+            child: Text(tabsFull[i],
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                    color: active ? _expAccent : const Color(0xFF6B7280))),
+          ),
+        );
+      })),
     );
   }
 

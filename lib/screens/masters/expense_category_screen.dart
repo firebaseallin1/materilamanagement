@@ -25,10 +25,12 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
   List get _filtered {
     final q = _search.toLowerCase();
     var list = _categories.where((c) {
-      return q.isEmpty || (c['name'] ?? '').toString().toLowerCase().contains(q);
+      return q.isEmpty ||
+          (c['name'] ?? '').toString().toLowerCase().contains(q);
     }).toList();
     list.sort((a, b) {
-      if (_sortBy == 'name_desc') return (b['name'] ?? '').compareTo(a['name'] ?? '');
+      if (_sortBy == 'name_desc')
+        return (b['name'] ?? '').compareTo(a['name'] ?? '');
       return (a['name'] ?? '').compareTo(b['name'] ?? '');
     });
     return list;
@@ -69,7 +71,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         alignment: Alignment.centerRight,
         child: Material(
           elevation: 16,
-          borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+          borderRadius:
+              const BorderRadius.horizontal(left: Radius.circular(20)),
           child: SizedBox(
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
@@ -78,7 +81,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         ),
       ),
       transitionBuilder: (_, a, __, child) => SlideTransition(
-        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(a),
+        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+            .animate(a),
         child: child,
       ),
     );
@@ -98,8 +102,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     const items = {'name_asc': 'Name A → Z', 'name_desc': 'Name Z → A'};
     final box = anchorCtx.findRenderObject() as RenderBox;
     final offset = box.localToGlobal(Offset.zero);
-    final position = RelativeRect.fromLTRB(
-      offset.dx, offset.dy + box.size.height + 4, offset.dx + box.size.width, 0);
+    final position = RelativeRect.fromLTRB(offset.dx,
+        offset.dy + box.size.height + 4, offset.dx + box.size.width, 0);
     showMenu<String>(
       context: anchorCtx,
       position: position,
@@ -111,7 +115,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           value: e.key,
           child: Row(children: [
             Icon(
-              active ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+              active
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
               size: 16,
               color: active ? _expCatAccent : const Color(0xFFD1D5DB),
             ),
@@ -167,7 +173,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Widget _buildToolbar(bool isMobile) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
+      padding:
+          EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
         children: [
           if (isMobile) ...[
@@ -181,11 +188,14 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: (v) => setState(() => _search = v),
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+                  style:
+                      const TextStyle(fontSize: 13, color: Color(0xFF111827)),
                   decoration: const InputDecoration(
                     hintText: 'Search...',
-                    hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                    prefixIcon: Icon(Icons.search_rounded, size: 16, color: Color(0xFF9CA3AF)),
+                    hintStyle:
+                        TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        size: 16, color: Color(0xFF9CA3AF)),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.only(top: 8),
                   ),
@@ -228,7 +238,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           color: Colors.white,
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.swap_vert_rounded, size: 14,
+          Icon(Icons.swap_vert_rounded,
+              size: 14,
               color: sorted ? _expCatAccent : const Color(0xFF6B7280)),
           const SizedBox(width: 6),
           Text(labels[_sortBy] ?? 'Sort',
@@ -298,7 +309,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               alignment: Alignment.center,
               child: Text('${index + 1}',
                   style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFCBD5E1))),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFCBD5E1))),
             ),
 
             // Avatar
@@ -314,7 +327,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                 child: Center(
                   child: Text(initial,
                       style: TextStyle(
-                          color: accent, fontSize: 20, fontWeight: FontWeight.w800)),
+                          color: accent,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800)),
                 ),
               ),
             ),
@@ -343,7 +358,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                           color: desc.isNotEmpty
                               ? const Color(0xFF6B7280)
                               : const Color(0xFFD1D5DB),
-                          fontStyle: desc.isEmpty ? FontStyle.italic : FontStyle.normal),
+                          fontStyle: desc.isEmpty
+                              ? FontStyle.italic
+                              : FontStyle.normal),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -357,7 +374,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
             // Category label chip
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 margin: const EdgeInsets.only(right: 8),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.08),
@@ -366,7 +384,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                 ),
                 child: Text('Category',
                     style: TextStyle(
-                        fontSize: 10, fontWeight: FontWeight.w600, color: accent)),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: accent)),
               ),
             ),
 
@@ -420,70 +440,73 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               onTap: () => _openForm(c),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  // Soft avatar
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(initial,
-                          style: TextStyle(
-                              color: accent,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Text
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(name,
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF111827)),
-                            overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 4),
-                        Text(
-                          desc.isNotEmpty ? desc : 'No description added',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: desc.isNotEmpty
-                                  ? const Color(0xFF6B7280)
-                                  : const Color(0xFFD1D5DB),
-                              fontStyle:
-                                  desc.isEmpty ? FontStyle.italic : FontStyle.normal),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Soft avatar
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 6),
-                        // Category tag
-                        Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text('Expense Category',
+                        child: Center(
+                          child: Text(initial,
                               style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: accent)),
+                                  color: accent,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800)),
                         ),
-                      ],
-                    ),
-                  ),
-                  _actionMenu(c),
-                ]),
+                      ),
+                      const SizedBox(width: 14),
+
+                      // Text
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(name,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF111827)),
+                                overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 4),
+                            Text(
+                              desc.isNotEmpty ? desc : 'No description added',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: desc.isNotEmpty
+                                      ? const Color(0xFF6B7280)
+                                      : const Color(0xFFD1D5DB),
+                                  fontStyle: desc.isEmpty
+                                      ? FontStyle.italic
+                                      : FontStyle.normal),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            // Category tag
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text('Expense Category',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: accent)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _actionMenu(c),
+                    ]),
               ),
             ),
           ),
@@ -510,20 +533,27 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     return SizedBox(
       width: 40,
       child: PopupMenuButton(
-        icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Color(0xFF9CA3AF)),
+        icon: const Icon(Icons.more_horiz_rounded,
+            size: 18, color: Color(0xFF9CA3AF)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         elevation: 3,
         itemBuilder: (_) => const [
-          PopupMenuItem(value: 'edit', child: Row(children: [
-            Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
-            SizedBox(width: 8),
-            Text('Edit', style: TextStyle(fontSize: 13)),
-          ])),
-          PopupMenuItem(value: 'delete', child: Row(children: [
-            Icon(Icons.delete_outline_rounded, size: 15, color: Color(0xFFDC2626)),
-            SizedBox(width: 8),
-            Text('Delete', style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-          ])),
+          PopupMenuItem(
+              value: 'edit',
+              child: Row(children: [
+                Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
+                SizedBox(width: 8),
+                Text('Edit', style: TextStyle(fontSize: 13)),
+              ])),
+          PopupMenuItem(
+              value: 'delete',
+              child: Row(children: [
+                Icon(Icons.delete_outline_rounded,
+                    size: 15, color: Color(0xFFDC2626)),
+                SizedBox(width: 8),
+                Text('Delete',
+                    style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
+              ])),
         ],
         onSelected: (val) {
           if (val == 'edit') _openForm(c);
@@ -540,22 +570,36 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(16)),
-          child: const Icon(Icons.receipt_long_outlined, size: 28, color: _expCatAccent),
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.receipt_long_outlined,
+              size: 28, color: _expCatAccent),
         ),
         const SizedBox(height: 14),
-        Text(_search.isNotEmpty ? 'No results found' : 'No expense categories yet',
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF111827))),
+        Text(
+            _search.isNotEmpty
+                ? 'No results found'
+                : 'No expense categories yet',
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827))),
         const SizedBox(height: 4),
         Text(
-          _search.isNotEmpty ? 'Try a different search term.' : 'Add your first expense category to get started.',
+          _search.isNotEmpty
+              ? 'Try a different search term.'
+              : 'Add your first expense category to get started.',
           style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
         ),
         if (_search.isNotEmpty) ...[
           const SizedBox(height: 12),
           TextButton(
-            onPressed: () => setState(() { _search = ''; _searchCtrl.clear(); }),
-            child: const Text('Clear filters', style: TextStyle(color: _expCatAccent)),
+            onPressed: () => setState(() {
+              _search = '';
+              _searchCtrl.clear();
+            }),
+            child: const Text('Clear filters',
+                style: TextStyle(color: _expCatAccent)),
           ),
         ] else ...[
           const SizedBox(height: 16),
@@ -567,7 +611,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               backgroundColor: _expCatAccent,
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
@@ -581,9 +626,11 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 class ExpenseCategoryFormPanel extends StatefulWidget {
   final Map? category;
   final VoidCallback onSaved;
-  const ExpenseCategoryFormPanel({super.key, this.category, required this.onSaved});
+  const ExpenseCategoryFormPanel(
+      {super.key, this.category, required this.onSaved});
   @override
-  State<ExpenseCategoryFormPanel> createState() => _ExpenseCategoryFormPanelState();
+  State<ExpenseCategoryFormPanel> createState() =>
+      _ExpenseCategoryFormPanelState();
 }
 
 class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
@@ -621,9 +668,12 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
     };
     final res = widget.category == null
         ? await ApiService.post('/expense-categories', body)
-        : await ApiService.put('/expense-categories/${widget.category!['_id']}', body);
+        : await ApiService.put(
+            '/expense-categories/${widget.category!['_id']}', body);
     if (mounted) {
-      showSnack(context, res['success'] == true ? 'Saved successfully!' : res['message'],
+      print('res : ${res['success']}');
+      showSnack(context,
+          res['success'] == true ? 'Saved successfully!' : res['message'],
           error: res['success'] != true);
       if (res['success'] == true) {
         Navigator.pop(context);
@@ -633,14 +683,16 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
     if (mounted) setState(() => _saving = false);
   }
 
-  InputDecoration _dec(String label, IconData icon, {String? hint}) => InputDecoration(
+  InputDecoration _dec(String label, IconData icon, {String? hint}) =>
+      InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, size: 18, color: _accent),
         labelStyle: const TextStyle(fontSize: 13, color: Colors.grey),
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: Color(0xFFDDE3E0))),
@@ -668,7 +720,9 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
         Container(
           width: 36,
           height: 4,
-          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+          decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(height: 2),
         Container(
@@ -689,19 +743,31 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
               decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.receipt_long_outlined, color: Colors.white, size: 20),
+              child: const Icon(Icons.receipt_long_outlined,
+                  color: Colors.white, size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(isNew ? 'Add Expense Category' : 'Edit Expense Category',
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 2),
-                Text(
-                  isNew ? 'Fill in the details to create a category' : 'Update the category information below',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                ),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        isNew
+                            ? 'Add Expense Category'
+                            : 'Edit Expense Category',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    Text(
+                      isNew
+                          ? 'Fill in the details to create a category'
+                          : 'Update the category information below',
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 11),
+                    ),
+                  ]),
             ),
             GestureDetector(
               onTap: () => Navigator.pop(context),
@@ -720,18 +786,21 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
           child: Form(
             key: _formKey,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               TextFormField(
                 controller: _nameCtrl,
                 decoration: _dec('Category Name', Icons.receipt_long_outlined,
                     hint: 'e.g. Labour, Fuel, Maintenance'),
-                validator: (v) => v!.trim().isEmpty ? 'Category name is required' : null,
+                validator: (v) =>
+                    v!.trim().isEmpty ? 'Category name is required' : null,
               ),
               const SizedBox(height: 14),
               TextFormField(
                 controller: _descCtrl,
                 maxLines: 3,
-                decoration: _dec('Description', Icons.notes_rounded, hint: 'Optional'),
+                decoration:
+                    _dec('Description', Icons.notes_rounded, hint: 'Optional'),
               ),
               const SizedBox(height: 24),
               Row(children: [
@@ -741,9 +810,11 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: const BorderSide(color: Color(0xFFDDE3E0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: Colors.grey, fontSize: 14)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -766,13 +837,16 @@ class _ExpenseCategoryFormPanelState extends State<ExpenseCategoryFormPanel> {
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                       child: _saving
                           ? const ButtonLoader()
                           : Text(isNew ? 'Add Category' : 'Save Changes',
                               style: const TextStyle(
-                                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ),

@@ -25,6 +25,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   bool _loading = true;
   String _search = '';
   String? _filterBranch;
+  String? _filterParty;
   DateTime? _filterFrom;
   DateTime? _filterTo;
   late TabController _tab;
@@ -65,6 +66,16 @@ class _PaymentScreenState extends State<PaymentScreen>
     }
   }
 
+  List<String> get _allPartyNames {
+    final names = _items
+        .map((e) => (e['partyName'] ?? '').toString().trim())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+    names.sort();
+    return names;
+  }
+
   List get _filtered {
     return _items.where((e) {
       if (_search.isNotEmpty) {
@@ -75,6 +86,7 @@ class _PaymentScreenState extends State<PaymentScreen>
         if (!match) return false;
       }
       if (_filterBranch != null && e['branch']?['_id'] != _filterBranch) return false;
+      if (_filterParty != null && e['partyName'] != _filterParty) return false;
       if (_filterFrom != null || _filterTo != null) {
         if (e['date'] == null) return false;
         final d = DateTime.parse(e['date']).toLocal();
@@ -87,10 +99,12 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   bool get _hasFilters =>
-      _filterBranch != null || _filterFrom != null || _filterTo != null;
+      _filterBranch != null || _filterParty != null ||
+      _filterFrom != null || _filterTo != null;
 
   void _clearFilters() => setState(() {
         _filterBranch = null;
+        _filterParty = null;
         _filterFrom = null;
         _filterTo = null;
       });
@@ -177,203 +191,280 @@ class _PaymentScreenState extends State<PaymentScreen>
   @override
   Widget build(BuildContext context) {
     final net = _totalReceived - _totalPaid;
-    return Scaffold(
-      body: Column(children: [
-        ScreenHeader(
-          title: 'Payments',
-          subtitle: 'Track incoming income and outgoing expenses',
-          onRefresh: _load,
-          onSearchChanged: (v) => setState(() => _search = v),
-          searchHint: 'Search by name…',
-          onAdd: _openForm,
-          addLabel: _tab.index == 0 ? 'Add Income' : 'Add Payment',
-        ),
-        _buildSummary(net),
-        _buildTabBar(),
-        _buildFilterBar(),
-        Expanded(
-          child: _loading
-              ? const AppLoader()
-              : TabBarView(
-                  controller: _tab,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildIncomingTab(),
-                    _buildOutgoingTab(),
-                  ],
-                ),
-        ),
-      ]),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final isMobile = constraints.maxWidth < 700;
+      return Scaffold(
+        body: Column(children: [
+          ScreenHeader(
+            title: 'Payments',
+            subtitle: 'Track incoming income and outgoing expenses',
+            onRefresh: _load,
+            onSearchChanged: (v) => setState(() => _search = v),
+            searchHint: 'Search by name…',
+            onAdd: _openForm,
+            addLabel: _tab.index == 0 ? 'Add Income' : 'Add Payment',
+          ),
+          _buildSummary(net, isMobile),
+          _buildToolbar(isMobile),
+          Expanded(
+            child: _loading
+                ? const AppLoader()
+                : TabBarView(
+                    controller: _tab,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      _buildIncomingTab(),
+                      _buildOutgoingTab(),
+                    ],
+                  ),
+          ),
+        ]),
+      );
+    });
   }
 
-  Widget _buildSummary(double net) {
+  Widget _buildSummary(double net, bool isMobile) {
     final fmt = NumberFormat('#,##0.##');
+    final tiles = [
+      _summaryTileWidget('Received', '₹${fmt.format(_totalReceived)}', _payGreen, Icons.arrow_downward_rounded),
+      _summaryTileWidget('Paid Out', '₹${fmt.format(_totalPaid)}', _payRed, Icons.arrow_upward_rounded),
+      _summaryTileWidget('Net', '₹${fmt.format(net.abs())}',
+          net >= 0 ? _payGreen : _payRed,
+          net >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded),
+      _summaryTileWidget('Pending', '₹${fmt.format(_totalPending)}', _payAmber, Icons.schedule_rounded),
+    ];
+    if (isMobile) {
+      return Container(
+        color: const Color(0xFFF9FAFB),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+        child: Column(children: [
+          Row(children: [
+            Expanded(child: tiles[0]),
+            const SizedBox(width: 6),
+            Expanded(child: tiles[1]),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(child: tiles[2]),
+            const SizedBox(width: 6),
+            Expanded(child: tiles[3]),
+          ]),
+        ]),
+      );
+    }
     return Container(
       color: const Color(0xFFF9FAFB),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(children: [
-        _summaryTile('Received', '₹${fmt.format(_totalReceived)}', _payGreen,
-            Icons.arrow_downward_rounded),
-        _summaryTile('Paid Out', '₹${fmt.format(_totalPaid)}', _payRed,
-            Icons.arrow_upward_rounded),
-        _summaryTile(
-          'Net',
-          '₹${fmt.format(net.abs())}',
-          net >= 0 ? _payGreen : _payRed,
-          net >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-        ),
-        _summaryTile('Pending', '₹${fmt.format(_totalPending)}', _payAmber,
-            Icons.schedule_rounded),
-      ]),
-    );
-  }
-
-  Widget _summaryTile(String label, String value, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1))],
-        ),
-        child: Row(children: [
-          Container(
-            width: 30, height: 30,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, size: 15, color: color),
-          ),
-          const SizedBox(width: 7),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
-            Text(value,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
-                overflow: TextOverflow.ellipsis),
-          ])),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(children: [
-        _tabBtn(0, 'Incoming', Icons.arrow_downward_rounded, _payGreen, _incoming.length),
+        Expanded(child: tiles[0]),
         const SizedBox(width: 8),
-        _tabBtn(1, 'Outgoing', Icons.arrow_upward_rounded, _payRed, _outgoing.length),
+        Expanded(child: tiles[1]),
+        const SizedBox(width: 8),
+        Expanded(child: tiles[2]),
+        const SizedBox(width: 8),
+        Expanded(child: tiles[3]),
       ]),
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _summaryTileWidget(String label, String value, Color color, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1))],
+      ),
+      child: Row(children: [
+        Container(
+          width: 30, height: 30,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, size: 15, color: color),
+        ),
+        const SizedBox(width: 7),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280), fontWeight: FontWeight.w500)),
+          Text(value,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
+              overflow: TextOverflow.ellipsis),
+        ])),
+      ]),
+    );
+  }
+
+  Widget _buildToolbar(bool isMobile) {
     final fmt = DateFormat('d MMM');
     final activeColor = _tab.index == 0 ? _payGreen : _payRed;
-    return Container(
-      color: const Color(0xFFF9FAFB),
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: Row(children: [
-        // Branch dropdown
-        Expanded(
-          flex: 3,
-          child: _filterDropdown(
-            icon: Icons.store_outlined,
-            hint: 'All Branches',
-            value: _filterBranch,
-            items: _branches
-                .map<DropdownMenuItem<String>>((b) =>
-                    DropdownMenuItem(value: b['_id'], child: Text(b['name'] ?? '', overflow: TextOverflow.ellipsis)))
-                .toList(),
-            onChanged: (v) => setState(() => _filterBranch = v),
-            activeColor: activeColor,
-          ),
-        ),
-        const SizedBox(width: 8),
-        // From date
-        Expanded(
-          flex: 2,
-          child: _dateTile(
-            label: _filterFrom != null ? fmt.format(_filterFrom!) : 'From',
-            icon: Icons.calendar_today_outlined,
-            active: _filterFrom != null,
-            activeColor: activeColor,
-            onTap: () => _pickDate(true),
-          ),
-        ),
-        const SizedBox(width: 8),
-        // To date
-        Expanded(
-          flex: 2,
-          child: _dateTile(
-            label: _filterTo != null ? fmt.format(_filterTo!) : 'To',
-            icon: Icons.calendar_month_outlined,
-            active: _filterTo != null,
-            activeColor: activeColor,
-            onTap: () => _pickDate(false),
-          ),
-        ),
-        // Clear button
-        if (_hasFilters) ...[
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: _clearFilters,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEE2E2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.close_rounded, size: 15, color: _payRed),
+
+    Widget branchDrop() => _filterDropdown(
+          icon: Icons.store_outlined,
+          hint: 'All Branches',
+          clearLabel: 'All Branches',
+          value: _filterBranch,
+          items: _branches
+              .map<DropdownMenuItem<String>>((b) => DropdownMenuItem(
+                  value: b['_id'],
+                  child: Text(b['name'] ?? '', overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (v) => setState(() => _filterBranch = v),
+          activeColor: activeColor,
+        );
+
+    Widget partyDrop() => _filterDropdown(
+          icon: Icons.person_outline_rounded,
+          hint: 'All Parties',
+          clearLabel: 'All Parties',
+          value: _filterParty,
+          items: _allPartyNames
+              .map<DropdownMenuItem<String>>((name) => DropdownMenuItem(
+                  value: name,
+                  child: Text(name, overflow: TextOverflow.ellipsis)))
+              .toList(),
+          onChanged: (v) => setState(() => _filterParty = v),
+          activeColor: activeColor,
+        );
+
+    Widget fromTile() => _dateTile(
+          label: _filterFrom != null ? fmt.format(_filterFrom!) : 'From Date',
+          icon: Icons.calendar_today_outlined,
+          active: _filterFrom != null,
+          activeColor: activeColor,
+          onTap: () => _pickDate(true),
+        );
+
+    Widget toTile() => _dateTile(
+          label: _filterTo != null ? fmt.format(_filterTo!) : 'To Date',
+          icon: Icons.calendar_month_outlined,
+          active: _filterTo != null,
+          activeColor: activeColor,
+          onTap: () => _pickDate(false),
+        );
+
+    Widget clearBtn() => GestureDetector(
+          onTap: _clearFilters,
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEE2E2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _payRed.withValues(alpha: 0.3)),
             ),
+            child: const Row(children: [
+              Icon(Icons.close_rounded, size: 13, color: _payRed),
+              SizedBox(width: 4),
+              Text('Clear',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: _payRed,
+                      fontWeight: FontWeight.w600)),
+            ]),
           ),
-        ],
-      ]),
+        );
+
+    if (isMobile) {
+      return Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Row 1: tab buttons
+          Row(children: [
+            Expanded(child: _tabBtn(0, 'Incoming', Icons.arrow_downward_rounded, _payGreen, _incoming.length)),
+            const SizedBox(width: 8),
+            Expanded(child: _tabBtn(1, 'Outgoing', Icons.arrow_upward_rounded, _payRed, _outgoing.length)),
+          ]),
+          const SizedBox(height: 8),
+          // Row 2: branch + party
+          Row(children: [
+            Expanded(child: branchDrop()),
+            const SizedBox(width: 8),
+            Expanded(child: partyDrop()),
+          ]),
+          const SizedBox(height: 8),
+          // Row 3: from + to + clear
+          Row(children: [
+            Expanded(child: fromTile()),
+            const SizedBox(width: 8),
+            Expanded(child: toTile()),
+            if (_hasFilters) ...[
+              const SizedBox(width: 8),
+              clearBtn(),
+            ],
+          ]),
+        ]),
+      );
+    }
+
+    // Desktop: scrollable single row
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          _tabBtn(0, 'Incoming', Icons.arrow_downward_rounded, _payGreen, _incoming.length),
+          const SizedBox(width: 8),
+          _tabBtn(1, 'Outgoing', Icons.arrow_upward_rounded, _payRed, _outgoing.length),
+          Container(height: 24, width: 1, color: const Color(0xFFE5E7EB),
+              margin: const EdgeInsets.symmetric(horizontal: 12)),
+          SizedBox(width: 150, child: branchDrop()),
+          const SizedBox(width: 8),
+          SizedBox(width: 150, child: partyDrop()),
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: fromTile()),
+          const SizedBox(width: 8),
+          SizedBox(width: 110, child: toTile()),
+          if (_hasFilters) ...[
+            const SizedBox(width: 8),
+            clearBtn(),
+          ],
+        ]),
+      ),
     );
   }
 
   Widget _filterDropdown({
     required IconData icon,
     required String hint,
+    required String clearLabel,
     required String? value,
     required List<DropdownMenuItem<String>> items,
     required ValueChanged<String?> onChanged,
     required Color activeColor,
   }) {
     final active = value != null;
-    return GestureDetector(
-      child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: active ? activeColor.withValues(alpha: 0.07) : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: active ? activeColor : const Color(0xFFE5E7EB)),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            hint: Row(children: [
-              Icon(icon, size: 13, color: const Color(0xFF9CA3AF)),
-              const SizedBox(width: 5),
-              Text(hint, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
-            ]),
-            icon: Icon(Icons.expand_more_rounded, size: 16,
-                color: active ? activeColor : const Color(0xFF9CA3AF)),
-            isExpanded: true,
-            style: TextStyle(fontSize: 12, color: active ? activeColor : _payPrimary, fontWeight: active ? FontWeight.w600 : FontWeight.w400),
-            items: [
-              DropdownMenuItem<String>(
-                value: null,
-                child: Text('All Branches', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-              ),
-              ...items,
-            ],
-            onChanged: onChanged,
-          ),
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: active ? activeColor.withValues(alpha: 0.07) : const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: active ? activeColor : const Color(0xFFE5E7EB)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          hint: Row(children: [
+            Icon(icon, size: 13, color: const Color(0xFF9CA3AF)),
+            const SizedBox(width: 5),
+            Text(hint, style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          ]),
+          icon: Icon(Icons.expand_more_rounded, size: 16,
+              color: active ? activeColor : const Color(0xFF9CA3AF)),
+          isExpanded: true,
+          style: TextStyle(fontSize: 12,
+              color: active ? activeColor : _payPrimary,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400),
+          items: [
+            DropdownMenuItem<String>(
+              value: null,
+              child: Text(clearLabel,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            ),
+            ...items,
+          ],
+          onChanged: onChanged,
         ),
       ),
     );

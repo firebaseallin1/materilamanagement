@@ -78,14 +78,40 @@ class ApiService {
   }
 
   static Map<String, dynamic> _handleResponse(http.Response response) {
-    final body = jsonDecode(response.body);
+    Map<String, dynamic>? body;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) body = decoded;
+    } on FormatException {
+      // Server returned non-JSON (e.g. HTML error page)
+    }
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return body;
-    } else {
-      return {
-        'success': false,
-        'message': body['message'] ?? 'Something went wrong',
-      };
+      return body ?? {'success': true};
+    }
+
+    final msg = body?['message'];
+    if (msg != null && msg.toString().isNotEmpty) {
+      return {'success': false, 'message': msg.toString()};
+    }
+    return {
+      'success': false,
+      'message': _statusMessage(response.statusCode),
+    };
+  }
+
+  static String _statusMessage(int code) {
+    switch (code) {
+      case 400: return 'Bad request. Please check your input.';
+      case 401: return 'Session expired. Please log in again.';
+      case 403: return 'You do not have permission for this action.';
+      case 404: return 'Resource not found.';
+      case 409: return 'A record with these details already exists.';
+      case 422: return 'Invalid data submitted.';
+      case 500: return 'Server error. Please try again later.';
+      case 502:
+      case 503: return 'Service temporarily unavailable. Please try again.';
+      default:  return 'Request failed (HTTP $code).';
     }
   }
 }
