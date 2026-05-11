@@ -7,8 +7,8 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -22,6 +22,7 @@ app.use('/api/measurements', require('./routes/measurements'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/transport', require('./routes/transport'));
 app.use('/api/expense-categories', require('./routes/expense-categories'));
+app.use('/api/user-categories', require('./routes/user-categories'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/reports', require('./routes/reports'));

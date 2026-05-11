@@ -4,15 +4,15 @@ import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
 // ════════════════════════════════════════════════
-// EXPENSE CATEGORY SCREEN
+// USER CATEGORY SCREEN
 // ════════════════════════════════════════════════
-class ExpenseCategoryScreen extends StatefulWidget {
-  const ExpenseCategoryScreen({super.key});
+class UserCategoryScreen extends StatefulWidget {
+  const UserCategoryScreen({super.key});
   @override
-  State<ExpenseCategoryScreen> createState() => _ExpenseCategoryScreenState();
+  State<UserCategoryScreen> createState() => _UserCategoryScreenState();
 }
 
-class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
+class _UserCategoryScreenState extends State<UserCategoryScreen> {
   List _categories = [];
   bool _loading = true;
   String _search = '';
@@ -21,7 +21,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
   String _sortBy = 'name_asc';
 
   static const _primary = Color(0xFF111827);
-  static const _orange = Color(0xFFEA580C);
+  static const _teal = Color(0xFF0D9488);
 
   List get _filtered {
     final q = _search.toLowerCase();
@@ -54,7 +54,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       _loading = true;
       _error = null;
     });
-    final res = await ApiService.get('/expense-categories');
+    final res = await ApiService.get('/user-categories');
     if (mounted) {
       setState(() {
         if (res['success'] == true) {
@@ -85,7 +85,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           child: SizedBox(
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
-            child: ExpenseCategoryFormPanel(
+            child: UserCategoryFormPanel(
                 category: category, onSaved: _load),
           ),
         ),
@@ -100,7 +100,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Future<void> _delete(String id) async {
     if (!await confirmDelete(context)) return;
-    final res = await ApiService.delete('/expense-categories/$id');
+    final res = await ApiService.delete('/user-categories/$id');
     if (mounted) {
       showSnack(context, res['success'] == true ? 'Deleted' : res['message'],
           error: res['success'] != true);
@@ -125,13 +125,13 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                   ? Icons.radio_button_checked_rounded
                   : Icons.radio_button_unchecked_rounded,
               size: 16,
-              color: active ? _orange : const Color(0xFFD1D5DB),
+              color: active ? _teal : const Color(0xFFD1D5DB),
             ),
             const SizedBox(width: 10),
             Text(e.value,
                 style: TextStyle(
                     fontSize: 13,
-                    color: active ? _orange : const Color(0xFF374151),
+                    color: active ? _teal : const Color(0xFF374151),
                     fontWeight:
                         active ? FontWeight.w600 : FontWeight.normal)),
           ]),
@@ -162,8 +162,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ScreenHeader(
-              title: 'Expense Categories',
-              subtitle: 'Manage expense category master data',
+              title: 'User Categories',
+              subtitle: 'Manage user category master data',
               onRefresh: _load,
               onSearchChanged: (v) => setState(() => _search = v),
               searchHint: 'Search categories...',
@@ -210,7 +210,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: active ? _orange : Colors.transparent,
+                    color: active ? _teal : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -220,7 +220,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                       fontSize: 13,
                       fontWeight:
                           active ? FontWeight.w600 : FontWeight.w400,
-                      color: active ? _orange : const Color(0xFF6B7280))),
+                      color: active ? _teal : const Color(0xFF6B7280))),
             ),
           );
         }),
@@ -267,12 +267,12 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.swap_vert_rounded,
               size: 14,
-              color: sorted ? _orange : const Color(0xFF6B7280)),
+              color: sorted ? _teal : const Color(0xFF6B7280)),
           const SizedBox(width: 6),
           Text(labels[_sortBy] ?? 'Sort',
               style: TextStyle(
                   fontSize: 13,
-                  color: sorted ? _orange : const Color(0xFF374151),
+                  color: sorted ? _teal : const Color(0xFF374151),
                   fontWeight:
                       sorted ? FontWeight.w500 : FontWeight.w400)),
         ]),
@@ -288,13 +288,13 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         color: const Color(0xFFF9FAFB),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: const Row(children: [
-          SizedBox(width: 28, child: Text('#', style: _kHdr)),
+          SizedBox(width: 28, child: Text('#', style: _kUCHdr)),
           SizedBox(width: 12),
-          Expanded(flex: 3, child: Text('Category Name', style: _kHdr)),
-          Expanded(flex: 4, child: Text('Description', style: _kHdr)),
+          Expanded(flex: 3, child: Text('Category Name', style: _kUCHdr)),
+          Expanded(flex: 4, child: Text('Description', style: _kUCHdr)),
           SizedBox(
               width: 88,
-              child: Text('Status', style: _kHdr, textAlign: TextAlign.center)),
+              child: Text('Status', style: _kUCHdr, textAlign: TextAlign.center)),
           SizedBox(width: 40),
         ]),
       ),
@@ -431,9 +431,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Widget _avatar(Map c, int index, {double size = 28}) {
     const bgs = [
-      Color(0xFFEA580C), Color(0xFFDC2626), Color(0xFFDB2777),
-      Color(0xFF9333EA), Color(0xFF2563EB), Color(0xFF0D9488),
-      Color(0xFF16A34A), Color(0xFFF59E0B),
+      Color(0xFF0D9488), Color(0xFF2563EB), Color(0xFF9333EA),
+      Color(0xFF16A34A), Color(0xFFEA580C), Color(0xFFDC2626),
+      Color(0xFFDB2777), Color(0xFFF59E0B),
     ];
     final bg = bgs[index % bgs.length];
     final name = c['name'] as String? ?? '';
@@ -564,14 +564,14 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           decoration: BoxDecoration(
               color: const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(16)),
-          child: const Icon(Icons.receipt_long_outlined,
+          child: const Icon(Icons.label_outline_rounded,
               size: 28, color: Color(0xFF9CA3AF)),
         ),
         const SizedBox(height: 14),
         Text(
             hasFilter
                 ? 'No results found'
-                : 'No expense categories yet',
+                : 'No user categories yet',
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -580,7 +580,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         Text(
             hasFilter
                 ? 'Try adjusting your search or filters.'
-                : 'Add your first expense category to get started.',
+                : 'Add your first user category to get started.',
             style:
                 const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
         if (hasFilter) ...[
@@ -591,7 +591,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               _tabIndex = 0;
             }),
             child: const Text('Clear filters',
-                style: TextStyle(color: _orange)),
+                style: TextStyle(color: _teal)),
           ),
         ] else ...[
           const SizedBox(height: 16),
@@ -618,33 +618,32 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const _kHdr = TextStyle(
+const _kUCHdr = TextStyle(
     fontSize: 12,
     color: Color(0xFF6B7280),
     fontWeight: FontWeight.w500);
 
-// ── Expense Category Form Panel ───────────────────────────────────────────────
-class ExpenseCategoryFormPanel extends StatefulWidget {
+// ── User Category Form Panel ──────────────────────────────────────────────────
+class UserCategoryFormPanel extends StatefulWidget {
   final Map? category;
   final VoidCallback onSaved;
-  const ExpenseCategoryFormPanel(
+  const UserCategoryFormPanel(
       {super.key, this.category, required this.onSaved});
   @override
-  State<ExpenseCategoryFormPanel> createState() =>
-      _ExpenseCategoryFormPanelState();
+  State<UserCategoryFormPanel> createState() =>
+      _UserCategoryFormPanelState();
 }
 
-class _ExpenseCategoryFormPanelState
-    extends State<ExpenseCategoryFormPanel> {
+class _UserCategoryFormPanelState extends State<UserCategoryFormPanel> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   bool _saving = false;
   bool _isActive = true;
 
-  static const _primary = Color(0xFF1B3A27);
-  static const _accent = Color(0xFF2E7D52);
-  static const _gradient2 = Color(0xFF1E6F5C);
+  static const _primary = Color(0xFF0C2D3F);
+  static const _accent = Color(0xFF0D9488);
+  static const _gradient2 = Color(0xFF0F766E);
 
   bool get _isEdit =>
       widget.category != null && widget.category!['_id'] != null;
@@ -675,9 +674,9 @@ class _ExpenseCategoryFormPanelState
       'isActive': _isActive,
     };
     final res = !_isEdit
-        ? await ApiService.post('/expense-categories', body)
+        ? await ApiService.post('/user-categories', body)
         : await ApiService.put(
-            '/expense-categories/${widget.category!['_id']}', body);
+            '/user-categories/${widget.category!['_id']}', body);
     if (mounted) {
       showSnack(context,
           res['success'] == true ? 'Saved successfully!' : res['message'],
@@ -763,7 +762,7 @@ class _ExpenseCategoryFormPanelState
             left: 20,
             right: 8),
         child: Row(children: [
-          const Icon(Icons.receipt_long_outlined,
+          const Icon(Icons.label_outline_rounded,
               color: Colors.white70, size: 22),
           const SizedBox(width: 10),
           Expanded(
@@ -772,8 +771,8 @@ class _ExpenseCategoryFormPanelState
                 children: [
               Text(
                   _isEdit
-                      ? 'Edit Expense Category'
-                      : 'Add Expense Category',
+                      ? 'Edit User Category'
+                      : 'Add User Category',
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
@@ -800,8 +799,8 @@ class _ExpenseCategoryFormPanelState
             TextFormField(
               controller: _nameCtrl,
               decoration: _dec(
-                  'Category Name', Icons.receipt_long_outlined,
-                  hint: 'e.g. Labour, Fuel, Maintenance'),
+                  'Category Name', Icons.label_outline_rounded,
+                  hint: 'e.g. Operator, Supervisor, Contractor'),
               validator: (v) =>
                   v!.trim().isEmpty ? 'Category name is required' : null,
             ),

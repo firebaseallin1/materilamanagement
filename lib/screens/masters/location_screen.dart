@@ -180,35 +180,6 @@ class _LocationScreenState extends State<LocationScreen> {
           EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
         children: [
-          // Mobile: search field
-          if (isMobile) ...[
-            Expanded(
-              child: Container(
-                height: 34,
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFD1D5DB)),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _search = v),
-                  style:
-                      const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-                  decoration: const InputDecoration(
-                    hintText: 'Search...',
-                    hintStyle:
-                        TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        size: 16, color: Color(0xFF9CA3AF)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(top: 8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-
           // Desktop: sort button
           if (!isMobile) Builder(builder: (ctx) => _sortBtn(ctx)),
 
@@ -224,12 +195,6 @@ class _LocationScreenState extends State<LocationScreen> {
             child: Text('${_filtered.length} rows',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
           ),
-
-          // Mobile: compact add button
-          if (isMobile) ...[
-            const SizedBox(width: 8),
-            _addBtn(),
-          ],
         ],
       ),
     );
@@ -285,20 +250,6 @@ class _LocationScreenState extends State<LocationScreen> {
     );
   }
 
-  // ── Add button (mobile / compact) ────────────────────────────────────────
-
-  Widget _addBtn() => ElevatedButton(
-        onPressed: _openForm,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Icon(Icons.add_rounded, size: 16),
-      );
 
   // ── Desktop table ────────────────────────────────────────────────────────
 
@@ -592,6 +543,7 @@ class _LocationFormPanelState extends State<LocationFormPanel> {
   final _addressCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   bool _saving = false;
+  bool _isActive = true;
 
   static const _primary = Color(0xFF1B3A27);
   static const _accent = Color(0xFF2E7D52);
@@ -603,6 +555,7 @@ class _LocationFormPanelState extends State<LocationFormPanel> {
       _nameCtrl.text = widget.location!['name'] ?? '';
       _addressCtrl.text = widget.location!['address'] ?? '';
       _descCtrl.text = widget.location!['description'] ?? '';
+      _isActive = widget.location!['isActive'] ?? true;
     }
   }
 
@@ -622,6 +575,7 @@ class _LocationFormPanelState extends State<LocationFormPanel> {
       'name': _nameCtrl.text.trim(),
       'address': _addressCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
+      'isActive': _isActive,
     };
 
     final res = widget.location == null
@@ -672,6 +626,37 @@ class _LocationFormPanelState extends State<LocationFormPanel> {
       ),
     );
   }
+
+  Widget _activeToggle() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F9F8),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFDDE3E0)),
+    ),
+    child: Row(children: [
+      Icon(Icons.toggle_on_outlined, size: 18, color: _accent),
+      const SizedBox(width: 12),
+      const Expanded(
+        child: Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
+      ),
+      Text(
+        _isActive ? 'Active' : 'Inactive',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: _isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Switch.adaptive(
+        value: _isActive,
+        onChanged: (v) => setState(() => _isActive = v),
+        activeThumbColor: const Color(0xFF16A34A),
+        activeTrackColor: const Color(0xFFBBF7D0),
+      ),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -781,6 +766,8 @@ class _LocationFormPanelState extends State<LocationFormPanel> {
                         'Notes / Description', Icons.notes_rounded,
                         hint: 'Additional info...'),
                   ),
+                  const SizedBox(height: 14),
+                  _activeToggle(),
                   const SizedBox(height: 24),
                   Row(children: [
                     Expanded(

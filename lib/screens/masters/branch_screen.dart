@@ -262,35 +262,6 @@ class _BranchScreenState extends State<BranchScreen> {
           EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
         children: [
-          // Mobile: search field
-          if (isMobile) ...[
-            Expanded(
-              child: Container(
-                height: 34,
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFD1D5DB)),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _search = v),
-                  style:
-                      const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-                  decoration: const InputDecoration(
-                    hintText: 'Search...',
-                    hintStyle:
-                        TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        size: 16, color: Color(0xFF9CA3AF)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(top: 8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-
           // Desktop: sort + filter
           if (!isMobile) ...[
             Builder(builder: (ctx) => _sortBtn(ctx)),
@@ -310,12 +281,6 @@ class _BranchScreenState extends State<BranchScreen> {
             child: Text('${_filtered.length} rows',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
           ),
-
-          // Mobile: compact add button
-          if (isMobile) ...[
-            const SizedBox(width: 8),
-            _addBtn(),
-          ],
         ],
       ),
     );
@@ -413,21 +378,6 @@ class _BranchScreenState extends State<BranchScreen> {
       0,
     );
   }
-
-  // ── Add button (mobile / compact) ────────────────────────────────────────
-
-  Widget _addBtn() => ElevatedButton(
-        onPressed: _openForm,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Icon(Icons.add_rounded, size: 16),
-      );
 
   // ── Desktop table ────────────────────────────────────────────────────────
 
@@ -893,6 +843,7 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
   final _contactCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   bool _saving = false;
+  bool _isActive = true;
 
   static const _primary = Color(0xFF1B3A27);
   static const _accent = Color(0xFF2E7D52);
@@ -905,6 +856,7 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
       _contactCtrl.text = widget.branch!['contactPerson'] ?? '';
       _phoneCtrl.text = widget.branch!['phone'] ?? '';
       _locationId = widget.branch!['location']?['_id'];
+      _isActive = widget.branch!['isActive'] ?? true;
     }
   }
 
@@ -924,6 +876,7 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
       'location': _locationId,
       'contactPerson': _contactCtrl.text.trim(),
       'phone': _phoneCtrl.text.trim(),
+      'isActive': _isActive,
     };
     final res = widget.branch == null
         ? await ApiService.post('/branches', body)
@@ -972,6 +925,36 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
       ),
     );
   }
+
+  Widget _activeToggle() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F9F8),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFDDE3E0)),
+    ),
+    child: Row(children: [
+      Icon(Icons.toggle_on_outlined, size: 18, color: _accent),
+      const SizedBox(width: 12),
+      const Expanded(
+        child: Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
+      ),
+      Text(
+        _isActive ? 'Active' : 'Inactive',
+        style: TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w500,
+          color: _isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Switch.adaptive(
+        value: _isActive,
+        onChanged: (v) => setState(() => _isActive = v),
+        activeThumbColor: const Color(0xFF16A34A),
+        activeTrackColor: const Color(0xFFBBF7D0),
+      ),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1095,6 +1078,8 @@ class _BranchFormPanelState extends State<BranchFormPanel> {
                       'Phone Number', Icons.phone_outlined,
                       hint: 'Optional'),
                 ),
+                const SizedBox(height: 14),
+                _activeToggle(),
                 const SizedBox(height: 24),
                 Row(children: [
                   Expanded(

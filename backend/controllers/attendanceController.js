@@ -15,7 +15,7 @@ exports.getAll = async (req, res) => {
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
       Attendance.find(query)
-        .populate('employee', 'name email')
+        .populate('employee', 'name photo')
         .populate('branch', 'name')
         .sort({ date: -1 }).skip(skip).limit(Number(limit)),
       Attendance.countDocuments(query),
@@ -38,8 +38,17 @@ exports.getOne = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
+    const { employee, date } = req.body;
+    if (employee && date) {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      const exists = await Attendance.findOne({ employee, date: { $gte: dayStart, $lte: dayEnd } });
+      if (exists) return res.status(400).json({ success: false, message: 'Attendance already marked for this employee on the selected date.' });
+    }
     const doc = await Attendance.create({ ...req.body, createdBy: req.user.id });
-    await doc.populate('employee branch');
+    await doc.populate([{ path: 'employee', select: 'name photo' }, { path: 'branch', select: 'name' }]);
     res.status(201).json({ success: true, data: doc });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -48,7 +57,9 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    const doc = await Attendance.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('employee branch');
+    const doc = await Attendance.findByIdAndUpdate(req.params.id, req.body, { new: true })
+      .populate('employee', 'name photo')
+      .populate('branch', 'name');
     if (!doc) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, data: doc });
   } catch (err) {

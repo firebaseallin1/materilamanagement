@@ -23,9 +23,9 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(String userId, String password) async {
     final res = await ApiService.post('/auth/login', {
-      'email': email,
+      'userId': userId,
       'password': password,
     });
     if (res['success'] == true) {

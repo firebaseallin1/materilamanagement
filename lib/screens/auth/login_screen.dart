@@ -16,7 +16,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController(text: 'arun.kumar@example.com');
+  final _userIdCtrl = TextEditingController(text: '');
   final _passCtrl = TextEditingController(text: 'password123');
   bool _obscure = true;
   bool _loading = false;
@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _ctrl.dispose();
-    _emailCtrl.dispose();
+    _userIdCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -48,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _loading = true);
     final res = await context
         .read<AuthService>()
-        .login(_emailCtrl.text.trim(), _passCtrl.text.trim());
+        .login(_userIdCtrl.text.trim(), _passCtrl.text.trim());
     if (mounted && res['success'] != true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -201,17 +201,17 @@ class _LoginScreenState extends State<LoginScreen>
 
             const SizedBox(height: 30),
 
-            _fieldLabel('Email'),
+            _fieldLabel('User ID'),
             const SizedBox(height: 6),
             TextFormField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
+              controller: _userIdCtrl,
+              keyboardType: TextInputType.text,
               style: const TextStyle(fontSize: 14),
               decoration: _inputDeco(
-                hint: 'Enter your email',
-                icon: Icons.email_outlined,
+                hint: 'Enter your user ID',
+                icon: Icons.badge_outlined,
               ),
-              validator: (v) => v!.isEmpty ? 'Email is required' : null,
+              validator: (v) => v!.isEmpty ? 'User ID is required' : null,
             ),
 
             const SizedBox(height: 18),

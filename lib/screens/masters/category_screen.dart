@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
-// ════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CATEGORY SCREEN
-// ════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class CategoryScreen extends StatefulWidget {
   const CategoryScreen({super.key});
 
@@ -108,8 +108,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   void _showSortMenu(BuildContext anchorCtx) {
     const items = {
-      'name_asc': 'Name A → Z',
-      'name_desc': 'Name Z → A',
+      'name_asc': 'Name A-Z',
+      'name_desc': 'Name Z-A',
     };
     showMenu<String>(
       context: anchorCtx,
@@ -220,33 +220,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
           EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
         children: [
-          if (isMobile) ...[
-            Expanded(
-              child: Container(
-                height: 34,
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFD1D5DB)),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _search = v),
-                  style:
-                      const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-                  decoration: const InputDecoration(
-                    hintText: 'Search...',
-                    hintStyle:
-                        TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        size: 16, color: Color(0xFF9CA3AF)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(top: 8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
           if (!isMobile) Builder(builder: (ctx) => _sortBtn(ctx)),
           const Spacer(),
           Container(
@@ -258,17 +231,13 @@ class _CategoryScreenState extends State<CategoryScreen> {
             child: Text('${_filtered.length} rows',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
           ),
-          if (isMobile) ...[
-            const SizedBox(width: 8),
-            _addBtn(),
-          ],
         ],
       ),
     );
   }
 
   Widget _sortBtn(BuildContext ctx) {
-    const labels = {'name_asc': 'Name A → Z', 'name_desc': 'Name Z → A'};
+    const labels = {'name_asc': 'Name A-Z', 'name_desc': 'Name Z-A'};
     final sorted = _sortBy != 'name_asc';
     return _toolbarSurface(
       onTap: () => _showSortMenu(ctx),
@@ -312,18 +281,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
     );
   }
 
-  Widget _addBtn() => ElevatedButton(
-        onPressed: _openForm,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Icon(Icons.add_rounded, size: 16),
-      );
 
   Widget _buildTable(List rows) {
     return Column(
@@ -375,7 +332,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
             Expanded(flex: 3, child: _nameCell(c, index)),
             Expanded(
               flex: 4,
-              child: Text(c['description'] ?? '—',
+              child: Text(c['description'] ?? 'â€"',
                   style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                   overflow: TextOverflow.ellipsis),
             ),
@@ -421,7 +378,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF111827))),
               const SizedBox(height: 2),
-              Text(c['description'] ?? '—',
+              Text(c['description'] ?? 'â€"',
                   style:
                       const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                   overflow: TextOverflow.ellipsis),
@@ -592,7 +549,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
 const _kCatHdr = TextStyle(
     fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
 
-// ── Category form panel ───────────────────────────────────────────────────────
+// â"€â"€ Category form panel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 class CategoryFormPanel extends StatefulWidget {
   final Map? category;
@@ -610,6 +567,7 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   bool _saving = false;
+  bool _isActive = true;
 
   static const _primary = Color(0xFF1B3A27);
   static const _accent = Color(0xFF2E7D52);
@@ -620,6 +578,7 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
     if (widget.category != null) {
       _nameCtrl.text = widget.category!['name'] ?? '';
       _descCtrl.text = widget.category!['description'] ?? '';
+      _isActive = widget.category!['isActive'] ?? true;
     }
   }
 
@@ -636,6 +595,7 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
     final body = {
       'name': _nameCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
+      'isActive': _isActive,
     };
     final res = widget.category == null
         ? await ApiService.post('/categories', body)
@@ -686,6 +646,36 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
       ),
     );
   }
+
+  Widget _activeToggle() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F9F8),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFDDE3E0)),
+    ),
+    child: Row(children: [
+      Icon(Icons.toggle_on_outlined, size: 18, color: _accent),
+      const SizedBox(width: 12),
+      const Expanded(
+        child: Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
+      ),
+      Text(
+        _isActive ? 'Active' : 'Inactive',
+        style: TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w500,
+          color: _isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Switch.adaptive(
+        value: _isActive,
+        onChanged: (v) => setState(() => _isActive = v),
+        activeThumbColor: const Color(0xFF16A34A),
+        activeTrackColor: const Color(0xFFBBF7D0),
+      ),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -784,6 +774,8 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
                       'Description', Icons.notes_rounded,
                       hint: 'Optional'),
                 ),
+                const SizedBox(height: 14),
+                _activeToggle(),
                 const SizedBox(height: 24),
                 Row(children: [
                   Expanded(
@@ -846,9 +838,9 @@ class _CategoryFormPanelState extends State<CategoryFormPanel> {
   }
 }
 
-// ════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MATERIAL SCREEN
-// ════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 class MaterialScreen extends StatefulWidget {
   const MaterialScreen({super.key});
   @override
@@ -960,8 +952,8 @@ class _MaterialScreenState extends State<MaterialScreen> {
 
   void _showSortMenu(BuildContext anchorCtx) {
     const items = {
-      'name_asc': 'Name A → Z',
-      'name_desc': 'Name Z → A',
+      'name_asc': 'Name A-Z',
+      'name_desc': 'Name Z-A',
       'category': 'By Category',
     };
     showMenu<String>(
@@ -1037,33 +1029,6 @@ class _MaterialScreenState extends State<MaterialScreen> {
           EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
       child: Row(
         children: [
-          if (isMobile) ...[
-            Expanded(
-              child: Container(
-                height: 34,
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFD1D5DB)),
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _search = v),
-                  style:
-                      const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-                  decoration: const InputDecoration(
-                    hintText: 'Search...',
-                    hintStyle:
-                        TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                    prefixIcon: Icon(Icons.search_rounded,
-                        size: 16, color: Color(0xFF9CA3AF)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(top: 8),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
           if (!isMobile) Builder(builder: (ctx) => _sortBtn(ctx)),
           const Spacer(),
           Container(
@@ -1075,10 +1040,6 @@ class _MaterialScreenState extends State<MaterialScreen> {
             child: Text('${_filtered.length} rows',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
           ),
-          if (isMobile) ...[
-            const SizedBox(width: 8),
-            _addBtn(),
-          ],
         ],
       ),
     );
@@ -1086,8 +1047,8 @@ class _MaterialScreenState extends State<MaterialScreen> {
 
   Widget _sortBtn(BuildContext ctx) {
     const labels = {
-      'name_asc': 'Name A → Z',
-      'name_desc': 'Name Z → A',
+      'name_asc': 'Name A-Z',
+      'name_desc': 'Name Z-A',
       'category': 'By Category',
     };
     final sorted = _sortBy != 'name_asc';
@@ -1133,18 +1094,6 @@ class _MaterialScreenState extends State<MaterialScreen> {
     );
   }
 
-  Widget _addBtn() => ElevatedButton(
-        onPressed: _openForm,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Icon(Icons.add_rounded, size: 16),
-      );
 
   Widget _buildTable(List rows) {
     return Column(
@@ -1195,14 +1144,14 @@ class _MaterialScreenState extends State<MaterialScreen> {
             Expanded(flex: 2, child: _codeCell(item['code'])),
             Expanded(
               flex: 2,
-              child: Text(item['category']?['name'] ?? '—',
+              child: Text(item['category']?['name'] ?? 'â€"',
                   style:
                       const TextStyle(fontSize: 13, color: Color(0xFF374151)),
                   overflow: TextOverflow.ellipsis),
             ),
             Expanded(
               flex: 1,
-              child: Text(item['unit'] ?? '—',
+              child: Text(item['unit'] ?? 'â€"',
                   style:
                       const TextStyle(fontSize: 13, color: Color(0xFF374151))),
             ),
@@ -1259,7 +1208,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
 
   Widget _codeCell(dynamic code) {
     if (code == null || code.toString().isEmpty) {
-      return const Text('—',
+      return const Text('â€"',
           style: TextStyle(fontSize: 13, color: Color(0xFFD1D5DB)));
     }
     return Container(
@@ -1306,7 +1255,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
                       color: Color(0xFF111827))),
               const SizedBox(height: 2),
               Text(
-                '${item['category']?['name'] ?? '—'}  ·  ${item['unit'] ?? ''}',
+                '${item['category']?['name'] ?? 'â€"'}  Â·  ${item['unit'] ?? ''}',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
             ]),
@@ -1411,7 +1360,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
 const _kMatHdr = TextStyle(
     fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
 
-// ── Material form panel ───────────────────────────────────────────────────────
+// â"€â"€ Material form panel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 class MaterialFormPanel extends StatefulWidget {
   final Map? item;
@@ -1433,6 +1382,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
   final _codeCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   bool _saving = false;
+  bool _isActive = true;
 
   static const _primary = Color(0xFF1B3A27);
   static const _accent = Color(0xFF2E7D52);
@@ -1446,6 +1396,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
       _descCtrl.text = widget.item!['description'] ?? '';
       _unit = widget.item!['unit'] ?? 'pcs';
       _categoryId = widget.item!['category']?['_id'];
+      _isActive = widget.item!['isActive'] ?? true;
     }
   }
 
@@ -1467,6 +1418,7 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
       'category': _categoryId,
       'unit': _unit,
       'description': _descCtrl.text.trim(),
+      'isActive': _isActive,
     };
 
     final res = widget.item == null
@@ -1517,6 +1469,36 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
       ),
     );
   }
+
+  Widget _activeToggle() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F9F8),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFDDE3E0)),
+    ),
+    child: Row(children: [
+      Icon(Icons.toggle_on_outlined, size: 18, color: _accent),
+      const SizedBox(width: 12),
+      const Expanded(
+        child: Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
+      ),
+      Text(
+        _isActive ? 'Active' : 'Inactive',
+        style: TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w500,
+          color: _isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Switch.adaptive(
+        value: _isActive,
+        onChanged: (v) => setState(() => _isActive = v),
+        activeThumbColor: const Color(0xFF16A34A),
+        activeTrackColor: const Color(0xFFBBF7D0),
+      ),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1664,6 +1646,8 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
                         'Notes / Description', Icons.notes_rounded,
                         hint: 'Additional info...'),
                   ),
+                  const SizedBox(height: 14),
+                  _activeToggle(),
                   const SizedBox(height: 24),
                   Row(children: [
                     Expanded(
@@ -1722,263 +1706,6 @@ class _MaterialFormPanelState extends State<MaterialFormPanel> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ════════════════════════════════════════════════
-// USER SCREEN (Admin only)
-// ════════════════════════════════════════════════
-class UserScreen extends StatefulWidget {
-  const UserScreen({super.key});
-  @override
-  State<UserScreen> createState() => _UserScreenState();
-}
-
-class _UserScreenState extends State<UserScreen> {
-  List _users = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final res = await ApiService.get('/users');
-    if (mounted)
-      setState(() {
-        _users = res['data'] ?? [];
-        _loading = false;
-      });
-  }
-
-  Future<void> _delete(String id) async {
-    if (!await confirmDelete(context)) return;
-    final res = await ApiService.delete('/users/$id');
-    if (mounted) {
-      showSnack(
-          context, res['success'] == true ? 'User deactivated' : res['message'],
-          error: res['success'] != true);
-      if (res['success'] == true) _load();
-    }
-  }
-
-  void _openForm([Map? user]) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: _UserForm(item: user, onSaved: _load),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(
-          onPressed: () => _openForm(), child: const Icon(Icons.person_add)),
-      body: Column(children: [
-        ScreenHeader(
-          title: 'Users',
-          subtitle: 'Manage system users and access permissions',
-          onRefresh: _load,
-        ),
-        Expanded(
-          child: _loading
-              ? const AppLoader()
-              : _users.isEmpty
-                  ? const EmptyState(message: 'No users', icon: Icons.people)
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _users.length,
-                      itemBuilder: (_, i) {
-                        final u = _users[i];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                                child: Text(
-                                    u['name']?.substring(0, 1).toUpperCase() ??
-                                        'U')),
-                            title: Text(u['name'] ?? '—',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                            subtitle: Text(
-                                '${u['email']} · ${u['branch']?['name'] ?? 'No branch'}'),
-                            trailing:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                              StatusBadge(
-                                  label: u['role'] ?? 'user',
-                                  color: u['role'] == 'admin'
-                                      ? Colors.purple
-                                      : Colors.blue),
-                              PopupMenuButton(
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                      value: 'edit', child: Text('Edit')),
-                                  const PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text('Deactivate',
-                                          style: TextStyle(color: Colors.red)))
-                                ],
-                                onSelected: (v) {
-                                  if (v == 'edit') {
-                                    _openForm(u);
-                                  } else {
-                                    _delete(u['_id']);
-                                  }
-                                },
-                              ),
-                            ]),
-                          ),
-                        );
-                      },
-                    ),
-        ),
-      ]),
-    );
-  }
-}
-
-class _UserForm extends StatefulWidget {
-  final Map? item;
-  final VoidCallback onSaved;
-  const _UserForm({this.item, required this.onSaved});
-  @override
-  State<_UserForm> createState() => _UserFormState();
-}
-
-class _UserFormState extends State<_UserForm> {
-  final _formKey = GlobalKey<FormState>();
-  List _branches = [];
-  String? _branchId, _role = 'user';
-  final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBranches();
-    if (widget.item != null) {
-      _nameCtrl.text = widget.item!['name'] ?? '';
-      _emailCtrl.text = widget.item!['email'] ?? '';
-      _phoneCtrl.text = widget.item!['phone'] ?? '';
-      _role = widget.item!['role'] ?? 'user';
-      _branchId = widget.item!['branch']?['_id'];
-    }
-  }
-
-  Future<void> _loadBranches() async {
-    final res = await ApiService.get('/branches');
-    if (mounted) setState(() => _branches = res['data'] ?? []);
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-    final body = {
-      'name': _nameCtrl.text,
-      'email': _emailCtrl.text,
-      'phone': _phoneCtrl.text,
-      'role': _role,
-      'branch': _branchId,
-      if (widget.item == null && _passCtrl.text.isNotEmpty)
-        'password': _passCtrl.text,
-      if (widget.item != null && _passCtrl.text.isNotEmpty)
-        'password': _passCtrl.text
-    };
-    final res = widget.item == null
-        ? await ApiService.post('/users', body)
-        : await ApiService.put('/users/${widget.item!['_id']}', body);
-    if (mounted) {
-      showSnack(context, res['success'] == true ? 'Saved!' : res['message'],
-          error: res['success'] != true);
-      if (res['success'] == true) {
-        Navigator.pop(context);
-        widget.onSaved();
-      }
-    }
-    if (mounted) setState(() => _saving = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(widget.item == null ? 'Add User' : 'Edit User',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            TextFormField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'Full Name'),
-                validator: (v) => v!.isEmpty ? 'Required' : null),
-            const SizedBox(height: 12),
-            TextFormField(
-                controller: _emailCtrl,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) => v!.isEmpty ? 'Required' : null),
-            const SizedBox(height: 12),
-            TextFormField(
-                controller: _phoneCtrl,
-                decoration: const InputDecoration(labelText: 'Phone'),
-                keyboardType: TextInputType.phone),
-            const SizedBox(height: 12),
-            TextFormField(
-                controller: _passCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                    labelText: widget.item == null
-                        ? 'Password'
-                        : 'New Password (leave blank to keep)'),
-                validator: (v) =>
-                    widget.item == null && v!.isEmpty ? 'Required' : null),
-            const SizedBox(height: 12),
-            AppDropdown<String>(
-                label: 'Role',
-                value: _role,
-                items: const [
-                  DropdownMenuItem(value: 'user', child: Text('User')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admin'))
-                ],
-                onChanged: (v) => setState(() => _role = v)),
-            const SizedBox(height: 12),
-            AppDropdown<String>(
-                label: 'Branch',
-                value: _branchId,
-                items: _branches
-                    .map<DropdownMenuItem<String>>((b) => DropdownMenuItem(
-                        value: b['_id'], child: Text(b['name'])))
-                    .toList(),
-                onChanged: (v) => setState(() => _branchId = v)),
-            const SizedBox(height: 20),
-            SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    child: _saving
-                        ? const ButtonLoader()
-                        : const Text('Save'))),
-            const SizedBox(height: 8),
-          ]),
-        ),
-      ),
     );
   }
 }

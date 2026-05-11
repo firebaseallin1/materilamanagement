@@ -1056,16 +1056,6 @@ class _MovementsTabState extends State<_MovementsTab> {
     }
   }
 
-  Future<void> _delete(String id) async {
-    if (!await confirmDelete(context)) return;
-    final res = await ApiService.delete('/stock/$id');
-    if (mounted) {
-      showSnack(context, res['success'] == true ? 'Deleted' : res['message'],
-          error: res['success'] != true);
-      if (res['success'] == true) _load();
-    }
-  }
-
   void _clearFilters() => setState(() {
         _selMaterial = null;
         _selRoute = null;
@@ -1170,9 +1160,6 @@ class _MovementsTabState extends State<_MovementsTab> {
                             itemCount: results.length,
                             itemBuilder: (_, i) => _HistoryCard(
                               item: results[i],
-                              onEdit: () => _openStockForm(context,
-                                  item: results[i], onSaved: _load),
-                              onDelete: () => _delete(results[i]['_id']),
                             ),
                           )
                         : _buildDesktopTable(results),
@@ -1549,7 +1536,6 @@ class _MovementsTabState extends State<_MovementsTab> {
           Expanded(flex: 3, child: Text('TRANSPORT', style: hdr)),
           SizedBox(width: 110, child: Text('QTY', style: hdr, textAlign: TextAlign.center)),
           SizedBox(width: 100, child: Text('DATE', style: hdr)),
-          SizedBox(width: 36),
         ]),
       ),
       const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
@@ -1766,17 +1752,6 @@ class _MovementsTabState extends State<_MovementsTab> {
                         ),
                       ),
                     ),
-                    // ACTIONS
-                    SizedBox(
-                      width: 36,
-                      child: Center(
-                        child: _ActionMenu(
-                          onEdit: () =>
-                              _openStockForm(context, item: item, onSaved: _load),
-                          onDelete: () => _delete(item['_id']),
-                        ),
-                      ),
-                    ),
                   ]),
                 ),
               ),
@@ -1792,10 +1767,7 @@ class _MovementsTabState extends State<_MovementsTab> {
 
 class _HistoryCard extends StatelessWidget {
   final Map item;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _HistoryCard(
-      {required this.item, required this.onEdit, required this.onDelete});
+  const _HistoryCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -1877,8 +1849,6 @@ class _HistoryCard extends StatelessWidget {
                       Text(_fmtDate(dateStr),
                           style: const TextStyle(
                               fontSize: 11, color: Color(0xFF94A3B8))),
-                      const SizedBox(width: 4),
-                      _ActionMenu(onEdit: onEdit, onDelete: onDelete),
                     ]),
 
                     const SizedBox(height: 10),
@@ -2205,51 +2175,6 @@ class _TransportSummaryCell extends StatelessWidget {
                   fontSize: 11, fontWeight: FontWeight.w500, color: color)),
         ],
       );
-}
-
-class _ActionMenu extends StatelessWidget {
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _ActionMenu({required this.onEdit, required this.onDelete});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 28,
-      height: 28,
-      child: PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert_rounded,
-            size: 16, color: Color(0xFFB0BEC5)),
-        padding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        elevation: 3,
-        itemBuilder: (_) => const [
-          PopupMenuItem(
-            value: 'edit',
-            child: Row(children: [
-              Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
-              SizedBox(width: 8),
-              Text('Edit', style: TextStyle(fontSize: 13)),
-            ]),
-          ),
-          PopupMenuItem(
-            value: 'delete',
-            child: Row(children: [
-              Icon(Icons.delete_outline_rounded,
-                  size: 15, color: Color(0xFFDC2626)),
-              SizedBox(width: 8),
-              Text('Delete',
-                  style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
-            ]),
-          ),
-        ],
-        onSelected: (v) {
-          if (v == 'edit') onEdit();
-          if (v == 'delete') onDelete();
-        },
-      ),
-    );
-  }
 }
 
 // ── History card config ───────────────────────────────────────────────────────

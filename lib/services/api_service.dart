@@ -102,16 +102,25 @@ class ApiService {
 
   static String _statusMessage(int code) {
     switch (code) {
-      case 400: return 'Bad request. Please check your input.';
-      case 401: return 'Session expired. Please log in again.';
-      case 403: return 'You do not have permission for this action.';
-      case 404: return 'Resource not found.';
-      case 409: return 'A record with these details already exists.';
-      case 422: return 'Invalid data submitted.';
-      case 500: return 'Server error. Please try again later.';
+      case 400:
+        return 'Bad request. Please check your input.';
+      case 401:
+        return 'Session expired. Please log in again.';
+      case 403:
+        return 'You do not have permission for this action.';
+      case 404:
+        return 'Resource not found.';
+      case 409:
+        return 'A record with these details already exists.';
+      case 422:
+        return 'Invalid data submitted.';
+      case 500:
+        return 'Server error. Please try again later.';
       case 502:
-      case 503: return 'Service temporarily unavailable. Please try again.';
-      default:  return 'Request failed (HTTP $code).';
+      case 503:
+        return 'Service temporarily unavailable. Please try again.';
+      default:
+        return 'Request failed (HTTP $code).';
     }
   }
 }
