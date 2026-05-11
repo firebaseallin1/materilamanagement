@@ -14,21 +14,53 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   List _items = [];
+  List _branches = [];
+  List _employees = [];
   bool _loading = true;
   String _search = '';
   final _searchCtrl = TextEditingController();
 
+  // Filters
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  String? _filterBranchId;
+  String? _filterEmployeeId;
+
   static const _primary = Color(0xFF111827);
+  static const _green = Color(0xFF16A34A);
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _loadDropdownData();
+    _load();
+  }
 
   @override
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
+  Future<void> _loadDropdownData() async {
+    final results = await Future.wait([
+      ApiService.get('/branches'),
+      ApiService.get('/users'),
+    ]);
+    if (mounted) setState(() {
+      _branches = results[0]['data'] ?? [];
+      _employees = results[1]['data'] ?? [];
+    });
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
-    final res = await ApiService.get('/attendance');
+    final params = <String, String>{};
+    if (_fromDate != null) params['from'] = _fromDate!.toIso8601String();
+    if (_toDate != null) {
+      final end = DateTime(_toDate!.year, _toDate!.month, _toDate!.day, 23, 59, 59);
+      params['to'] = end.toIso8601String();
+    }
+    if (_filterBranchId != null) params['branch'] = _filterBranchId!;
+    if (_filterEmployeeId != null) params['employee'] = _filterEmployeeId!;
+    final res = await ApiService.get('/attendance', params: params);
     if (mounted) setState(() { _items = res['data'] ?? []; _loading = false; });
   }
 
@@ -69,20 +101,71 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
+  // ── Computed ───────────────────────────────────────────────────────────────
+
   List get _filtered {
     if (_search.isEmpty) return _items;
     final q = _search.toLowerCase();
     return _items.where((i) =>
-      (i['employee']?['name'] ?? '').toString().toLowerCase().contains(q) ||
-      (i['branch']?['name'] ?? '').toString().toLowerCase().contains(q)).toList();
+      (i['employee']?['name'] ?? '').toString().toLowerCase().contains(q)).toList();
   }
 
-  // ── Photo viewer ────────────────────────────────────────────────────────────
+  int get _activeFilterCount {
+    int c = 0;
+    if (_fromDate != null || _toDate != null) c++;
+    if (_filterBranchId != null) c++;
+    if (_filterEmployeeId != null) c++;
+    return c;
+  }
+
+  ({double amount, double presentHrs, double otHrs}) get _totals {
+    double amount = 0, presentHrs = 0, otHrs = 0;
+    for (final item in _filtered) {
+      final p = item['isPresent'] == true ? 8.0 : 0.0;
+      final ot = (item['otHours'] ?? 0).toDouble();
+      final rate = (item['hourRate'] ?? 0).toDouble();
+      presentHrs += p;
+      otHrs += ot;
+      amount += (p + ot) * rate;
+    }
+    return (amount: amount, presentHrs: presentHrs, otHrs: otHrs);
+  }
+
+  // ── Date picker ────────────────────────────────────────────────────────────
+
+  Future<void> _pickDate({required bool isFrom}) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom ? (_fromDate ?? now) : (_toDate ?? now),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFF16A34A)),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _fromDate = picked;
+        if (_toDate != null && _toDate!.isBefore(picked)) _toDate = picked;
+      } else {
+        _toDate = picked;
+        if (_fromDate != null && _fromDate!.isAfter(picked)) _fromDate = picked;
+      }
+    });
+    _load();
+  }
+
+  // ── Photo viewer ───────────────────────────────────────────────────────────
 
   void _viewPhoto(Map employee) {
     final photo = employee['photo'] as String?;
     if (photo == null || photo.isEmpty) return;
-    Uint8List? bytes;
+    late final List<int> bytes;
     try { bytes = base64Decode(photo); } catch (_) { return; }
     final name = employee['name'] as String? ?? '';
     showDialog(
@@ -107,7 +190,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: InteractiveViewer(
-                  child: Image.memory(bytes!, fit: BoxFit.contain, width: double.infinity),
+                  child: Image.memory(Uint8List.fromList(bytes), fit: BoxFit.contain, width: double.infinity),
                 ),
               ),
             ),
@@ -162,17 +245,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       body: LayoutBuilder(builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 700;
         final rows = _filtered;
+        final t = _totals;
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           ScreenHeader(
             title: 'Attendance',
             subtitle: 'Track daily attendance records for your workforce',
             onRefresh: _load,
             onSearchChanged: (v) => setState(() => _search = v),
-            searchHint: 'Search attendance...',
+            searchHint: 'Search by name...',
             onAdd: _openForm,
             addLabel: 'Mark Attendance',
           ),
           _buildToolbar(isMobile),
+          // Totals strip
+          if (!_loading && rows.isNotEmpty) _buildTotalsStrip(rows.length, t),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           Expanded(
             child: _loading
@@ -188,55 +274,229 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
-  Widget _buildToolbar(bool isMobile) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 10),
+  // ── Totals strip ───────────────────────────────────────────────────────────
+
+  Widget _buildTotalsStrip(int count, ({double amount, double presentHrs, double otHrs}) t) {
+    final fmt = NumberFormat('#,##0.00');
+    return Container(
+      color: const Color(0xFFF0FDF4),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
       child: Row(children: [
-        if (isMobile) ...[
-          Expanded(
-            child: Container(
-              height: 34,
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFD1D5DB)),
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() => _search = v),
-                style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
-                decoration: const InputDecoration(
-                  hintText: 'Search...',
-                  hintStyle: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
-                  prefixIcon: Icon(Icons.search_rounded, size: 16, color: Color(0xFF9CA3AF)),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.only(top: 8),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+        _totalChip(Icons.people_outline_rounded, '$count records', const Color(0xFF374151), const Color(0xFFE5E7EB)),
+        const SizedBox(width: 10),
+        _totalChip(Icons.access_time_rounded,
+            '${t.presentHrs % 1 == 0 ? t.presentHrs.toInt() : t.presentHrs}h present',
+            const Color(0xFF166534), const Color(0xFFBBF7D0)),
+        if (t.otHrs > 0) ...[
+          const SizedBox(width: 10),
+          _totalChip(Icons.more_time_rounded,
+              'OT ${t.otHrs % 1 == 0 ? t.otHrs.toInt() : t.otHrs}h',
+              const Color(0xFF5B21B6), const Color(0xFFEDE9FE)),
         ],
         const Spacer(),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(6)),
-          child: Text('${_filtered.length} rows',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: _green,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            const Icon(Icons.currency_rupee_rounded, size: 13, color: Colors.white),
+            Text(fmt.format(t.amount),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+          ]),
         ),
-        if (isMobile) ...[
-          const SizedBox(width: 8),
-          ElevatedButton(
+      ]),
+    );
+  }
+
+  Widget _totalChip(IconData icon, String label, Color color, Color bg) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 13, color: color),
+      const SizedBox(width: 5),
+      Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
+    ]),
+  );
+
+  // ── Toolbar ────────────────────────────────────────────────────────────────
+
+  Widget _buildToolbar(bool isMobile) {
+    final fmt = DateFormat('dd MMM yyyy');
+    final hasFilter = _activeFilterCount > 0;
+
+    final filters = Row(children: [
+      // Employee dropdown
+      _filterBox(
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            value: _filterEmployeeId,
+            hint: const Text('All Employees',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+            isDense: true,
+            isExpanded: true,
+            icon: const Icon(Icons.expand_more_rounded, size: 15, color: Color(0xFF6B7280)),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
+            borderRadius: BorderRadius.circular(8),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('All Employees')),
+              ..._employees.map((u) => DropdownMenuItem(
+                    value: u['_id'] as String,
+                    child: Text(u['name'] as String? ?? '', overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (v) { setState(() => _filterEmployeeId = v); _load(); },
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      // Branch dropdown
+      _filterBox(
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            value: _filterBranchId,
+            hint: const Text('All Branches',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+            isDense: true,
+            isExpanded: true,
+            icon: const Icon(Icons.expand_more_rounded, size: 15, color: Color(0xFF6B7280)),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
+            borderRadius: BorderRadius.circular(8),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('All Branches')),
+              ..._branches.map((b) => DropdownMenuItem(
+                    value: b['_id'] as String,
+                    child: Text(b['name'] as String? ?? '', overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (v) { setState(() => _filterBranchId = v); _load(); },
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      // From date
+      _dateTapBox(
+        label: 'From',
+        date: _fromDate,
+        fmt: fmt,
+        onTap: () => _pickDate(isFrom: true),
+        onClear: _fromDate != null ? () { setState(() => _fromDate = null); _load(); } : null,
+      ),
+      const SizedBox(width: 8),
+      // To date
+      _dateTapBox(
+        label: 'To',
+        date: _toDate,
+        fmt: fmt,
+        onTap: () => _pickDate(isFrom: false),
+        onClear: _toDate != null ? () { setState(() => _toDate = null); _load(); } : null,
+      ),
+      if (hasFilter) ...[
+        const SizedBox(width: 8),
+        InkWell(
+          onTap: () { setState(() { _fromDate = null; _toDate = null; _filterBranchId = null; _filterEmployeeId = null; }); _load(); },
+          borderRadius: BorderRadius.circular(7),
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              border: Border.all(color: const Color(0xFFFCA5A5)),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.close_rounded, size: 13, color: Color(0xFFDC2626)),
+              SizedBox(width: 4),
+              Text('Clear', style: TextStyle(fontSize: 12, color: Color(0xFFDC2626), fontWeight: FontWeight.w500)),
+            ]),
+          ),
+        ),
+      ],
+      const SizedBox(width: 12),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(6)),
+        child: Text('${_filtered.length} rows',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+      ),
+      if (isMobile) ...[
+        const SizedBox(width: 8),
+        SizedBox(
+          height: 34,
+          child: ElevatedButton(
             onPressed: _openForm,
             style: ElevatedButton.styleFrom(
               backgroundColor: _primary, foregroundColor: Colors.white, elevation: 0,
-              minimumSize: const Size(0, 34),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: const Icon(Icons.add_rounded, size: 16),
           ),
-        ],
-      ]),
+        ),
+      ],
+    ]);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20, vertical: 8),
+      child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: filters),
+    );
+  }
+
+  Widget _filterBox({required Widget child}) => Container(
+    height: 34,
+    constraints: const BoxConstraints(minWidth: 120, maxWidth: 170),
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: const Color(0xFFD1D5DB)),
+      borderRadius: BorderRadius.circular(7),
+    ),
+    child: Center(child: child),
+  );
+
+  Widget _dateTapBox({
+    required String label,
+    required DateTime? date,
+    required DateFormat fmt,
+    required VoidCallback onTap,
+    VoidCallback? onClear,
+  }) {
+    final active = date != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF0FDF4) : Colors.white,
+          border: Border.all(color: active ? const Color(0xFF86EFAC) : const Color(0xFFD1D5DB)),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.calendar_today_rounded, size: 13,
+              color: active ? const Color(0xFF16A34A) : const Color(0xFF9CA3AF)),
+          const SizedBox(width: 6),
+          Text(
+            active ? fmt.format(date) : label,
+            style: TextStyle(
+              fontSize: 12,
+              color: active ? const Color(0xFF166534) : const Color(0xFF6B7280),
+              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          if (active && onClear != null) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onClear,
+              child: const Icon(Icons.close_rounded, size: 13, color: Color(0xFF16A34A)),
+            ),
+          ] else ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more_rounded, size: 15, color: Color(0xFF9CA3AF)),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -256,7 +516,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           SizedBox(width: 60, child: Text('Hrs', style: _kAttHdr, textAlign: TextAlign.center)),
           SizedBox(width: 60, child: Text('OT Hrs', style: _kAttHdr, textAlign: TextAlign.center)),
           SizedBox(width: 70, child: Text('Rate/Hr', style: _kAttHdr, textAlign: TextAlign.center)),
-          SizedBox(width: 80, child: Text('Total', style: _kAttHdr, textAlign: TextAlign.right)),
+          SizedBox(width: 88, child: Text('Total', style: _kAttHdr, textAlign: TextAlign.right)),
           SizedBox(width: 40),
         ]),
       ),
@@ -294,16 +554,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           Expanded(flex: 3, child: Row(children: [
             _employeeAvatar(item),
             const SizedBox(width: 8),
-            Flexible(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item['employee']?['name'] ?? '—',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
-                    overflow: TextOverflow.ellipsis),
-                Text(isPresent ? 'Present' : 'Absent',
-                    style: TextStyle(fontSize: 11, color: isPresent ? const Color(0xFF16A34A) : const Color(0xFFDC2626))),
-              ],
-            )),
+            Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item['employee']?['name'] ?? '—',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+                  overflow: TextOverflow.ellipsis),
+              Text(isPresent ? 'Present' : 'Absent',
+                  style: TextStyle(fontSize: 11, color: isPresent ? const Color(0xFF16A34A) : const Color(0xFFDC2626))),
+            ])),
           ])),
           Expanded(flex: 2, child: Text(item['branch']?['name'] ?? '—',
               style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
@@ -322,7 +579,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             child: Text(hourRate > 0 ? '₹${fmt.format(hourRate)}' : '—',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
           )),
-          SizedBox(width: 80, child: Text(
+          SizedBox(width: 88, child: Text(
             total > 0 ? '₹${fmt.format(total)}' : '—',
             textAlign: TextAlign.right,
             style: TextStyle(
@@ -410,10 +667,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Widget _otBadge(double hrs) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(
-      color: const Color(0xFFEDE9FE),
-      borderRadius: BorderRadius.circular(20),
-    ),
+    decoration: BoxDecoration(color: const Color(0xFFEDE9FE), borderRadius: BorderRadius.circular(20)),
     child: Text('OT ${hrs % 1 == 0 ? hrs.toInt() : hrs}h',
         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF7C3AED))),
   );
@@ -481,12 +735,8 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
       _branchId = e['branch']?['_id'];
       _isPresent = e['isPresent'] ?? false;
       _otEnabled = e['otEnabled'] ?? false;
-      _otHoursCtrl.text = e['otHours'] != null && e['otHours'] != 0
-          ? e['otHours'].toString()
-          : '';
-      _hourRateCtrl.text = e['hourRate'] != null && e['hourRate'] != 0
-          ? e['hourRate'].toString()
-          : '';
+      _otHoursCtrl.text = e['otHours'] != null && e['otHours'] != 0 ? e['otHours'].toString() : '';
+      _hourRateCtrl.text = e['hourRate'] != null && e['hourRate'] != 0 ? e['hourRate'].toString() : '';
       _remarksCtrl.text = e['remarks'] ?? '';
       if (e['date'] != null) _date = DateTime.parse(e['date']);
     }
@@ -494,26 +744,20 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
 
   @override
   void dispose() {
-    _remarksCtrl.dispose();
-    _otHoursCtrl.dispose();
-    _hourRateCtrl.dispose();
+    _remarksCtrl.dispose(); _otHoursCtrl.dispose(); _hourRateCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadDropdowns() async {
     final results = await Future.wait([ApiService.get('/users'), ApiService.get('/branches')]);
-    if (mounted) setState(() {
-      _users = results[0]['data'] ?? [];
-      _branches = results[1]['data'] ?? [];
-    });
+    if (mounted) setState(() { _users = results[0]['data'] ?? []; _branches = results[1]['data'] ?? []; });
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     final body = {
-      'employee': _employeeId,
-      'branch': _branchId,
+      'employee': _employeeId, 'branch': _branchId,
       'date': _date.toIso8601String(),
       'isPresent': _isPresent,
       'otEnabled': _otEnabled,
@@ -546,33 +790,29 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
   );
 
   Widget _switchRow({
-    required String label,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
+    required String label, required String subtitle,
+    required bool value, required ValueChanged<bool> onChanged,
     Color activeColor = _accent,
-  }) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: value ? Color.lerp(const Color(0xFFF7F9F8), activeColor, 0.06) : const Color(0xFFF7F9F8),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: value ? activeColor.withValues(alpha: 0.4) : const Color(0xFFDDE3E0)),
-        ),
-        child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                color: value ? activeColor : const Color(0xFF374151))),
-            Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-          ])),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: activeColor,
-            activeTrackColor: activeColor.withValues(alpha: 0.25),
-          ),
-        ]),
-      );
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: value ? Color.lerp(const Color(0xFFF7F9F8), activeColor, 0.06) : const Color(0xFFF7F9F8),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: value ? activeColor.withValues(alpha: 0.4) : const Color(0xFFDDE3E0)),
+    ),
+    child: Row(children: [
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+            color: value ? activeColor : const Color(0xFF374151))),
+        Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+      ])),
+      Switch.adaptive(
+        value: value, onChanged: onChanged,
+        activeThumbColor: activeColor,
+        activeTrackColor: activeColor.withValues(alpha: 0.25),
+      ),
+    ]),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -596,11 +836,9 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(children: [
-          Container(
-            width: 40, height: 40,
+          Container(width: 40, height: 40,
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20),
-          ),
+            child: const Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20)),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(isNew ? 'Mark Attendance' : 'Edit Attendance',
@@ -611,11 +849,9 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
           ])),
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 32, height: 32,
+            child: Container(width: 32, height: 32,
               decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.close, color: Colors.white70, size: 16),
-            ),
+              child: const Icon(Icons.close, color: Colors.white70, size: 16)),
           ),
         ]),
       ),
@@ -625,8 +861,6 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
           child: Form(
             key: _formKey,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-              // Employee
               DropdownButtonFormField<String>(
                 initialValue: _employeeId,
                 decoration: _dec('Employee', Icons.person_outline_rounded),
@@ -639,8 +873,6 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 isExpanded: true,
               ),
               const SizedBox(height: 14),
-
-              // Branch
               DropdownButtonFormField<String>(
                 initialValue: _branchId,
                 decoration: _dec('Branch', Icons.store_outlined),
@@ -653,22 +885,14 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 isExpanded: true,
               ),
               const SizedBox(height: 14),
-
-              // Date
               DatePickerField(label: 'Date', value: _date, onChanged: (d) => setState(() => _date = d)),
               const SizedBox(height: 14),
-
-              // Present switch
               _switchRow(
-                label: 'Present',
-                subtitle: _isPresent ? '8 regular hours' : 'Marked as absent',
-                value: _isPresent,
-                onChanged: (v) => setState(() => _isPresent = v),
+                label: 'Present', subtitle: _isPresent ? '8 regular hours' : 'Marked as absent',
+                value: _isPresent, onChanged: (v) => setState(() => _isPresent = v),
                 activeColor: const Color(0xFF16A34A),
               ),
               const SizedBox(height: 14),
-
-              // Hour rate (always visible)
               TextFormField(
                 controller: _hourRateCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -682,22 +906,12 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 },
               ),
               const SizedBox(height: 14),
-
-              // OT switch
               _switchRow(
-                label: 'Overtime (OT)',
-                subtitle: _otEnabled ? 'Enter OT hours below' : 'No overtime',
+                label: 'Overtime (OT)', subtitle: _otEnabled ? 'Enter OT hours below' : 'No overtime',
                 value: _otEnabled,
-                onChanged: (v) {
-                  setState(() {
-                    _otEnabled = v;
-                    if (!v) _otHoursCtrl.clear();
-                  });
-                },
+                onChanged: (v) { setState(() { _otEnabled = v; if (!v) _otHoursCtrl.clear(); }); },
                 activeColor: const Color(0xFF7C3AED),
               ),
-
-              // OT hours — shown only when OT is enabled
               if (_otEnabled) ...[
                 const SizedBox(height: 14),
                 TextFormField(
@@ -715,13 +929,9 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 ),
               ],
               const SizedBox(height: 14),
-
-              // Remarks
               TextFormField(controller: _remarksCtrl, maxLines: 2,
                   decoration: _dec('Remarks', Icons.notes_rounded, hint: 'Optional...')),
               const SizedBox(height: 16),
-
-              // Summary card
               if (rate > 0)
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -731,12 +941,10 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                     border: Border.all(color: const Color(0xFFBBF7D0)),
                   ),
                   child: Column(children: [
-                    _summaryRow('Regular hours', '${presentHrs}h × ₹${fmt.format(rate)}',
-                        '₹${fmt.format(presentHrs * rate)}'),
+                    _summaryRow('Regular hours', '${presentHrs}h × ₹${fmt.format(rate)}', '₹${fmt.format(presentHrs * rate)}'),
                     if (_otEnabled && otHrs > 0) ...[
                       const SizedBox(height: 6),
-                      _summaryRow('OT hours', '${otHrs % 1 == 0 ? otHrs.toInt() : otHrs}h × ₹${fmt.format(rate)}',
-                          '₹${fmt.format(otHrs * rate)}'),
+                      _summaryRow('OT hours', '${otHrs % 1 == 0 ? otHrs.toInt() : otHrs}h × ₹${fmt.format(rate)}', '₹${fmt.format(otHrs * rate)}'),
                     ],
                     const Divider(height: 16, color: Color(0xFFBBF7D0)),
                     Row(children: [
@@ -747,7 +955,6 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                     ]),
                   ]),
                 ),
-
               const SizedBox(height: 24),
               Row(children: [
                 Expanded(child: OutlinedButton(
@@ -774,8 +981,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: _saving
-                        ? const ButtonLoader()
+                    child: _saving ? const ButtonLoader()
                         : Text(isNew ? 'Mark Attendance' : 'Save Changes',
                             style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
