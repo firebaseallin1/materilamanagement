@@ -251,7 +251,7 @@ class _UserScreenState extends State<UserScreen> {
               onAdd: _openForm,
               addLabel: 'Add User',
             ),
-            if (!isMobile) _buildTabBar(),
+            _buildTabBar(),
             _buildToolbar(isMobile),
             const Divider(height: 1, color: Color(0xFFE5E7EB)),
             Expanded(
@@ -1071,7 +1071,8 @@ class _UserFormPanelState extends State<UserFormPanel> {
       _phoneCtrl.text = widget.user!['phone'] ?? '';
       _branchId = widget.user!['branch']?['_id'];
       _isActive = widget.user!['isActive'] ?? true;
-      _photoBase64 = widget.user!['photo'] as String?;
+      final rawPhoto = widget.user!['photo'] as String?;
+      _photoBase64 = (rawPhoto != null && rawPhoto.isNotEmpty) ? rawPhoto : null;
       _userCategoryId = widget.user!['userCategory']?['_id'];
       if (_userCategoryId == null) {
         final role = widget.user!['role'] as String?;
@@ -1224,7 +1225,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
       'userCategory': _userCategoryId,
       'role': role,
       'isActive': _isActive,
-      if (_photoBase64 != null) 'photo': _photoBase64,
+      'photo': _photoBase64 ?? '',
       if (_passCtrl.text.isNotEmpty) 'password': _passCtrl.text,
     };
 
@@ -1311,7 +1312,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
 
   Widget _photoPicker() {
     Uint8List? bytes;
-    if (_photoBase64 != null) {
+    if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
       try {
         bytes = base64Decode(_photoBase64!);
       } catch (_) {}

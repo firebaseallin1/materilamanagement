@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../transactions/stock_screen.dart';
 import '../transactions/attendance_screen.dart';
+import '../transactions/advance_screen.dart';
 import '../transactions/expense_screen.dart';
 import '../transactions/payment_screen.dart';
 import '../transactions/transport_screen.dart';
@@ -170,6 +171,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildContent(bool isDesktop) {
     switch (_navIndex) {
       case 1: return const AttendanceScreen();
+      case 14: return const AdvanceScreen();
       case 2: return const StockScreen();
       case 3: return const TransportScreen();
       case 4: return const ExpenseScreen();
@@ -412,6 +414,7 @@ class _SidebarContent extends StatelessWidget {
               const SizedBox(height: 8),
               _sectionLabel('OPERATIONS'),
               _navItem(1, Icons.how_to_reg_outlined, 'Attendance', null),
+              _navItem(14, Icons.account_balance_wallet_outlined, 'Advances', null),
               _navItem(2, Icons.inventory_2_outlined, 'Material Stock', null),
               _navItem(3, Icons.local_shipping_outlined, 'Transport Detail', null),
               _navItem(4, Icons.receipt_long_outlined, 'Expenses', null),

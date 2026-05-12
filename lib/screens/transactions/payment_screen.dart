@@ -1018,16 +1018,23 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   static const _gradient2 = Color(0xFF1E6F5C);
 
   final _formKey = GlobalKey<FormState>();
-  List _branches = [];
+  List _branches = [], _employees = [];
   String? _branchId, _mode = 'cash', _category = 'expense';
+  String? _employeeId;
   late String _type;
   final _partyCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _totalDueCtrl = TextEditingController();
+  final _advanceAdjCtrl = TextEditingController();
   final _refCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
+
+  // Employee balance
+  double _outstandingBalance = 0;
+  double _advanceBalance = 0;
+  bool _balanceLoading = false;
 
   double get _pendingAmt {
     final due = double.tryParse(_totalDueCtrl.text) ?? 0;
@@ -1052,16 +1059,24 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   void initState() {
     super.initState();
     _type = widget.defaultType;
-    _loadBranches();
+    _loadDropdowns();
     if (widget.item != null) {
       final e = widget.item!;
       _branchId = e['branch']?['_id'];
+      final emp = e['employee'];
+      if (emp is Map) {
+        _employeeId = emp['_id'] as String?;
+      } else if (emp is String && emp.isNotEmpty) {
+        _employeeId = emp;
+      }
       _mode = e['paymentMode'] ?? 'cash';
       _type = e['type'] ?? widget.defaultType;
       _category = e['category'] ?? 'expense';
       _partyCtrl.text = e['partyName'] ?? '';
       _amountCtrl.text = '${e['amount'] ?? ''}';
       _totalDueCtrl.text = '${e['totalDue'] ?? e['amount'] ?? ''}';
+      _advanceAdjCtrl.text = e['advanceAdjustment'] != null && e['advanceAdjustment'] != 0
+          ? '${e['advanceAdjustment']}' : '';
       _refCtrl.text = e['referenceNo'] ?? '';
       _descCtrl.text = e['description'] ?? '';
       if (e['date'] != null) _date = DateTime.parse(e['date']);
@@ -1073,14 +1088,51 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     _partyCtrl.dispose();
     _amountCtrl.dispose();
     _totalDueCtrl.dispose();
+    _advanceAdjCtrl.dispose();
     _refCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadBranches() async {
-    final res = await ApiService.get('/branches');
-    if (mounted) setState(() => _branches = res['data'] ?? []);
+  Future<void> _loadDropdowns() async {
+    final results = await Future.wait([
+      ApiService.get('/branches'),
+      ApiService.get('/users'),
+    ]);
+    if (mounted) {
+      setState(() {
+        _branches = results[0]['data'] ?? [];
+        _employees = results[1]['data'] ?? [];
+      });
+      if (_employeeId != null) _fetchBalance(_employeeId!);
+    }
+  }
+
+  Future<void> _fetchBalance(String empId) async {
+    setState(() => _balanceLoading = true);
+    final res = await ApiService.get('/advances/balance', params: {'employee': empId});
+    if (mounted) {
+      setState(() {
+        _outstandingBalance = (res['outstandingBalance'] ?? 0).toDouble();
+        _advanceBalance = (res['advanceBalance'] ?? 0).toDouble();
+        _balanceLoading = false;
+      });
+    }
+  }
+
+  void _onEmployeeChanged(String? empId) {
+    setState(() {
+      _employeeId = empId;
+      _outstandingBalance = 0;
+      _advanceBalance = 0;
+      if (empId != null) {
+        final emp = _employees.firstWhere((u) => u['_id'] == empId, orElse: () => {});
+        if (emp.isNotEmpty && _partyCtrl.text.isEmpty) {
+          _partyCtrl.text = emp['name'] ?? '';
+        }
+        _fetchBalance(empId);
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -1101,6 +1153,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       'date': _date.toIso8601String(),
       'referenceNo': _refCtrl.text,
       'description': _descCtrl.text,
+      if (_employeeId != null) 'employee': _employeeId,
+      'advanceAdjustment': double.tryParse(_advanceAdjCtrl.text) ?? 0,
     };
     final res = _isEdit
         ? await ApiService.put('/payments/${widget.item!['_id']}', body)
@@ -1133,6 +1187,28 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
+
+  Widget _balanceCard(String label, double amount, IconData icon, Color color, Color bg) {
+    final fmt = NumberFormat('#,##0.00');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text('₹${fmt.format(amount)}',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+        ])),
+      ]),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1197,6 +1273,40 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               ]),
               const SizedBox(height: 16),
             ],
+            // Employee selector (optional — links payment to employee)
+            AppDropdown<String>(
+              label: 'Employee (optional)',
+              value: _employeeId,
+              items: _employees.map<DropdownMenuItem<String>>((u) {
+                final active = u['isActive'] ?? true;
+                final name = u['name'] as String? ?? '';
+                return DropdownMenuItem(
+                  value: u['_id'] as String,
+                  child: Text(active ? name : '$name (Inactive)',
+                      style: TextStyle(color: active ? null : Colors.grey)),
+                );
+              }).toList(),
+              onChanged: _onEmployeeChanged,
+            ),
+            // Balance cards
+            if (_employeeId != null) ...[
+              const SizedBox(height: 10),
+              _balanceLoading
+                  ? const Center(child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))))
+                  : Row(children: [
+                      Expanded(child: _balanceCard('Outstanding',
+                          _outstandingBalance, Icons.account_balance_outlined,
+                          const Color(0xFF0369A1), const Color(0xFFE0F2FE))),
+                      const SizedBox(width: 8),
+                      Expanded(child: _balanceCard('Advance',
+                          _advanceBalance, Icons.account_balance_wallet_outlined,
+                          const Color(0xFF7C3AED), const Color(0xFFF5F3FF))),
+                    ]),
+            ],
+            const SizedBox(height: 14),
             TextFormField(
               controller: _partyCtrl,
               decoration: _dec('Party Name',
@@ -1234,6 +1344,17 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               validator: (v) => v!.isEmpty ? 'Required' : null,
               onChanged: (_) => setState(() {}),
             ),
+            // Advance adjustment
+            if (_employeeId != null) ...[
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _advanceAdjCtrl,
+                keyboardType: TextInputType.number,
+                decoration: _dec('Advance Adjustment (₹)',
+                    hint: 'Amount to deduct from advance balance'),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
             // Pending preview
             if (isOutgoing && _pendingAmt > 0) ...[
               const SizedBox(height: 10),

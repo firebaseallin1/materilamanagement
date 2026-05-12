@@ -341,10 +341,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             borderRadius: BorderRadius.circular(8),
             items: [
               const DropdownMenuItem(value: null, child: Text('All Employees')),
-              ..._employees.map((u) => DropdownMenuItem(
-                    value: u['_id'] as String,
-                    child: Text(u['name'] as String? ?? '', overflow: TextOverflow.ellipsis),
-                  )),
+              ..._employees.map((u) {
+                    final active = u['isActive'] ?? true;
+                    final name = u['name'] as String? ?? '';
+                    return DropdownMenuItem(
+                      value: u['_id'] as String,
+                      child: Text(active ? name : '$name (Inactive)',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: active ? null : Colors.grey)),
+                    );
+                  }),
             ],
             onChanged: (v) { setState(() => _filterEmployeeId = v); _load(); },
           ),
@@ -866,8 +872,15 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 decoration: _dec('Employee', Icons.person_outline_rounded),
                 style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
-                items: _users.map<DropdownMenuItem<String>>((u) =>
-                    DropdownMenuItem(value: u['_id'] as String, child: Text(u['name'] as String))).toList(),
+                items: _users.map<DropdownMenuItem<String>>((u) {
+                  final active = u['isActive'] ?? true;
+                  final name = u['name'] as String? ?? '';
+                  return DropdownMenuItem(
+                    value: u['_id'] as String,
+                    child: Text(active ? name : '$name (Inactive)',
+                        style: TextStyle(color: active ? null : Colors.grey)),
+                  );
+                }).toList(),
                 onChanged: (v) => setState(() => _employeeId = v),
                 validator: (v) => v == null ? 'Required' : null,
                 isExpanded: true,
