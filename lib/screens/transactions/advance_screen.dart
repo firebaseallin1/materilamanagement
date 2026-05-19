@@ -27,9 +27,18 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
   static const _primary = Color(0xFF111827);
   static const _accent = Color(0xFF7C3AED);
 
+  static DateTime _weekSunday() {
+    final now = DateTime.now();
+    final daysFromSun = now.weekday % 7; // Sun=7→0, Mon=1→1, …, Sat=6→6
+    return DateTime(now.year, now.month, now.day - daysFromSun);
+  }
+
   @override
   void initState() {
     super.initState();
+    final sunday = _weekSunday();
+    _fromDate = sunday;
+    _toDate = sunday.add(const Duration(days: 6));
     _loadDropdownData();
     _load();
   }

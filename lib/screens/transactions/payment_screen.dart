@@ -31,12 +31,23 @@ class _PaymentScreenState extends State<PaymentScreen>
   DateTime? _filterFrom;
   DateTime? _filterTo;
   late TabController _tab;
+  final Set<String> _expandedCards = {};
+  final Set<String> _collapsedWeeks = {};
+
+  static DateTime _currentWeekSunday() {
+    final now = DateTime.now();
+    final daysFromSun = now.weekday % 7; // Sun=7→0, Mon=1→1, …, Sat=6→6
+    return DateTime(now.year, now.month, now.day - daysFromSun);
+  }
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
     _tab.addListener(() => setState(() {}));
+    final sunday = _currentWeekSunday();
+    _filterFrom = sunday;
+    _filterTo = sunday.add(const Duration(days: 6));
     _load();
     _loadBranches();
   }
@@ -812,70 +823,197 @@ class _PaymentScreenState extends State<PaymentScreen>
     final monday = DateTime.parse(weekKey);
     final isCurrent = _isCurrentWeek(weekKey);
     final fmt = NumberFormat('#,##0.##');
-    final totalDue = items.fold(
-        0.0,
-        (s, e) =>
-            s + (double.tryParse('${e['totalDue'] ?? e['amount']}') ?? 0));
     final totalPaid =
         items.fold(0.0, (s, e) => s + (double.tryParse('${e['amount']}') ?? 0));
-    final pending = totalDue - totalPaid;
     final weekLabel = isCurrent
         ? 'This Week'
         : '${DateFormat('d MMM').format(monday)} – ${DateFormat('d MMM').format(sunday)}';
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        margin: const EdgeInsets.only(bottom: 8, top: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isCurrent ? const Color(0xFFFEF3C7) : const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: isCurrent
-                  ? const Color(0xFFFBBF24)
-                  : const Color(0xFFE5E7EB)),
-        ),
-        child: Row(children: [
-          Icon(
-              isCurrent
-                  ? Icons.calendar_today_rounded
-                  : Icons.calendar_month_outlined,
-              size: 13,
-              color: isCurrent ? _payAmber : const Color(0xFF9CA3AF)),
-          const SizedBox(width: 6),
-          Text(weekLabel,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isCurrent ? _payAmber : const Color(0xFF374151))),
-          if (isCurrent) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+    // Per-category outstanding: for each category, group by entity key and
+    // take the LAST payment's thisWeekOutstanding (most recent carries the balance).
+    double categoryOutstanding(String cat, String Function(Map) entityKey) {
+      final catItems = items
+          .where((e) => (e['category'] ?? 'expense') == cat)
+          .cast<Map>()
+          .toList();
+      if (catItems.isEmpty) return 0.0;
+      // Group by entity, take the most recently CREATED payment per entity.
+      // Use date first; break ties with _id (ObjectId encodes creation time,
+      // so lexicographically larger _id = later insertion).
+      final Map<String, Map> latest = {};
+      for (final p in catItems) {
+        final key = entityKey(p);
+        final existing = latest[key];
+        if (existing == null) {
+          latest[key] = p;
+        } else {
+          final da = p['date'] != null ? DateTime.parse(p['date'] as String) : DateTime(0);
+          final db = existing['date'] != null ? DateTime.parse(existing['date'] as String) : DateTime(0);
+          final dateNewer = da.isAfter(db);
+          final dateSame = da.isAtSameMomentAs(db);
+          final idNewer = dateSame &&
+              (p['_id']?.toString() ?? '').compareTo(existing['_id']?.toString() ?? '') > 0;
+          if (dateNewer || idNewer) latest[key] = p;
+        }
+      }
+      return latest.values.fold(
+          0.0, (s, p) => s + ((p['thisWeekOutstanding'] ?? 0) as num).toDouble());
+    }
+
+    final laborOut = categoryOutstanding('labor',
+        (p) => p['employee']?['_id']?.toString() ?? p['partyName'] ?? '');
+    final transportOut = categoryOutstanding('transport',
+        (p) => p['vehicleNo']?.toString() ?? p['partyName'] ?? '');
+    final expenseOut = categoryOutstanding('expense',
+        (p) => p['_id']?.toString() ?? '');
+
+    final anyOutstanding = laborOut > 0 || transportOut > 0 || expenseOut > 0;
+
+    final weekCards = _buildWeekCards(items, sunday);
+    final isWeekExpanded = !_collapsedWeeks.contains(weekKey);
+    final borderClr = isCurrent ? const Color(0xFFFBBF24) : const Color(0xFF475569);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, top: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderClr, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+              color: borderClr.withValues(alpha: 0.20),
+              blurRadius: 8,
+              offset: const Offset(0, 3)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── Week header (tappable, dark gradient) ─────────────────────
+          InkWell(
+            onTap: () => setState(() {
+              if (isWeekExpanded) {
+                _collapsedWeeks.add(weekKey);
+              } else {
+                _collapsedWeeks.remove(weekKey);
+              }
+            }),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               decoration: BoxDecoration(
-                  color: _payAmber, borderRadius: BorderRadius.circular(8)),
-              child: const Text('CURRENT',
-                  style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
+                gradient: LinearGradient(
+                  colors: isCurrent
+                      ? [const Color(0xFFD97706), const Color(0xFFF59E0B)]
+                      : [const Color(0xFF1E293B), const Color(0xFF334155)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Icon(
+                      isCurrent
+                          ? Icons.calendar_today_rounded
+                          : Icons.calendar_month_outlined,
+                      size: 13,
+                      color: Colors.white70),
+                  const SizedBox(width: 6),
+                  Text(weekLabel,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                  if (isCurrent) ...[
+                    const SizedBox(width: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Text('CURRENT',
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white)),
+                    ),
+                  ],
+                  const Spacer(),
+                  Text('₹${fmt.format(totalPaid)} paid',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                  const SizedBox(width: 6),
+                  Icon(
+                      isWeekExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: Colors.white70),
+                ]),
+                if (anyOutstanding) ...[
+                  const SizedBox(height: 8),
+                  Divider(
+                      height: 1,
+                      color: Colors.white.withValues(alpha: 0.25)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 6, runSpacing: 4, children: [
+                    if (laborOut > 0)
+                      _outstandingChip(Icons.people_outline_rounded,
+                          'Labor  ₹${fmt.format(laborOut)}', _payPurple),
+                    if (transportOut > 0)
+                      _outstandingChip(Icons.local_shipping_outlined,
+                          'Transport  ₹${fmt.format(transportOut)}', _payBlue),
+                    if (expenseOut > 0)
+                      _outstandingChip(Icons.receipt_long_outlined,
+                          'Expense  ₹${fmt.format(expenseOut)}', _payOrange),
+                  ]),
+                ],
+              ]),
             ),
-          ],
-          const Spacer(),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('₹${fmt.format(totalPaid)} paid',
-                style: const TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w600, color: _payRed)),
-            if (pending > 0)
-              Text('₹${fmt.format(pending)} pending',
-                  style: const TextStyle(fontSize: 10, color: _payAmber)),
-          ]),
+          ),
+
+          // ── Payment cards (shown only when expanded) ───────────────────
+          if (isWeekExpanded)
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(children: weekCards),
+            ),
         ]),
       ),
-      ..._buildWeekCards(items, sunday),
-      const SizedBox(height: 8),
-    ]);
+    );
   }
+
+  Widget _outstandingChip(IconData icon, String label, Color color) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 11, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
+          const SizedBox(width: 4),
+          Text('due',
+              style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.white.withValues(alpha: 0.8))),
+        ]),
+      );
 
   List<Widget> _buildWeekCards(List items, DateTime weekSunday) {
     // Group labor payments by employee; keep transport/expense as individual cards
@@ -894,11 +1032,14 @@ class _PaymentScreenState extends State<PaymentScreen>
     }
 
     final cards = <Widget>[];
-    for (final group in laborGroups.values) {
+    for (final entry in laborGroups.entries) {
+      final empKey = entry.key;
+      final group  = entry.value;
+      final cardKey = '${empKey}_${DateFormat('yyyyMMdd').format(weekSunday)}';
       if (group.length == 1) {
         cards.add(_buildOutgoingCard(group[0] as Map, 0, weekSunday));
       } else {
-        cards.add(_buildGroupedLaborCard(group, weekSunday));
+        cards.add(_buildGroupedLaborCard(group, weekSunday, cardKey));
       }
     }
     for (int i = 0; i < nonLaborItems.length; i++) {
@@ -907,7 +1048,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     return cards;
   }
 
-  Widget _buildGroupedLaborCard(List payments, DateTime weekSunday) {
+  Widget _buildGroupedLaborCard(List payments, DateTime weekSunday, String cardKey) {
     final fmt  = NumberFormat('#,##0.##');
     final dfmt = DateFormat('d MMM');
 
@@ -955,6 +1096,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     final weekOutstanding = ((last['thisWeekOutstanding']  ?? 0) as num).toDouble();
 
     const catColor = _payPurple;
+    final isExpanded = _expandedCards.contains(cardKey);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -975,70 +1117,86 @@ class _PaymentScreenState extends State<PaymentScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Column(children: [
-          // ── Header ─────────────────────────────────────────────────────
-          IntrinsicHeight(
-            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Container(width: 4, color: catColor),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(children: [
-                    CircleAvatar(
-                      radius: 17,
-                      backgroundColor: catColor.withValues(alpha: 0.1),
-                      child: const Icon(Icons.people_outline_rounded,
-                          size: 15, color: catColor),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(first['partyName'] ?? '—',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                    color: _payPrimary)),
-                            const SizedBox(height: 3),
-                            Row(children: [
-                              _catBadge('labor'),
-                              const SizedBox(width: 4),
-                              _modeBadge(first['paymentMode'] ?? ''),
-                              if (periodLabel != null) ...[
+          // ── Header (tap to expand/collapse) ────────────────────────────
+          InkWell(
+            onTap: () => setState(() {
+              if (isExpanded) {
+                _expandedCards.remove(cardKey);
+              } else {
+                _expandedCards.add(cardKey);
+              }
+            }),
+            child: IntrinsicHeight(
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Container(width: 4, color: catColor),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(children: [
+                      CircleAvatar(
+                        radius: 17,
+                        backgroundColor: catColor.withValues(alpha: 0.1),
+                        child: const Icon(Icons.people_outline_rounded,
+                            size: 15, color: catColor),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(first['partyName'] ?? '—',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: _payPrimary)),
+                              const SizedBox(height: 3),
+                              Row(children: [
+                                _catBadge('labor'),
                                 const SizedBox(width: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                      color: catColor.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(6)),
-                                  child: Text(periodLabel,
-                                      style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                          color: catColor)),
-                                ),
-                              ],
+                                _modeBadge(first['paymentMode'] ?? ''),
+                                if (periodLabel != null) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: catColor.withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(6)),
+                                    child: Text(periodLabel,
+                                        style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                            color: catColor)),
+                                  ),
+                                ],
+                              ]),
                             ]),
-                          ]),
-                    ),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('₹${fmt.format(totalPaid)}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: _payRed)),
-                      Text('${sorted.length} payments',
-                          style: const TextStyle(
-                              fontSize: 10, color: Color(0xFF9CA3AF))),
+                      ),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('₹${fmt.format(totalPaid)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: _payRed)),
+                        Text('${sorted.length} payments',
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF9CA3AF))),
+                      ]),
+                      const SizedBox(width: 6),
+                      Icon(
+                          isExpanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: const Color(0xFF9CA3AF)),
                     ]),
-                  ]),
+                  ),
                 ),
-              ),
-            ]),
+              ]),
+            ),
           ),
 
-          // ── Attendance summary ──────────────────────────────────────────
+          // ── Attendance summary (always visible) ─────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
@@ -1079,62 +1237,63 @@ class _PaymentScreenState extends State<PaymentScreen>
             ]),
           ),
 
-          // ── Individual payment sub-entries ──────────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              border: Border(
-                  top: BorderSide(color: Color(0xFFE5E7EB))),
-            ),
-            child: Column(
-              children: sorted.asMap().entries.map((e) {
-                final idx = e.key;
-                final p   = e.value as Map;
-                final pd  = p['date'] != null
-                    ? DateFormat('dd MMM yyyy').format(DateTime.parse(p['date'] as String))
-                    : '—';
-                final amt = ((p['amount'] ?? 0) as num).toDouble();
-                return Container(
-                  decoration: BoxDecoration(
-                    border: idx < sorted.length - 1
-                        ? const Border(
-                            bottom: BorderSide(color: Color(0xFFF3F4F6)))
-                        : null,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  child: Row(children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                          color: catColor.withValues(alpha: 0.5),
-                          shape: BoxShape.circle),
+          // ── Individual sub-entries (shown only when expanded) ───────────
+          if (isExpanded)
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+              ),
+              child: Column(
+                children: sorted.asMap().entries.map((e) {
+                  final idx = e.key;
+                  final p   = e.value as Map;
+                  final pd  = p['date'] != null
+                      ? DateFormat('dd MMM yyyy')
+                          .format(DateTime.parse(p['date'] as String))
+                      : '—';
+                  final amt = ((p['amount'] ?? 0) as num).toDouble();
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: idx < sorted.length - 1
+                          ? const Border(
+                              bottom: BorderSide(color: Color(0xFFF3F4F6)))
+                          : null,
                     ),
-                    const SizedBox(width: 8),
-                    Text(pd,
-                        style: const TextStyle(
-                            fontSize: 11, color: Color(0xFF6B7280))),
-                    if ((p['presentDays'] ?? 0) > 0) ...[
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    child: Row(children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                            color: catColor.withValues(alpha: 0.5),
+                            shape: BoxShape.circle),
+                      ),
                       const SizedBox(width: 8),
-                      Text('${p['presentDays']}d',
+                      Text(pd,
                           style: const TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF2563EB),
-                              fontWeight: FontWeight.w500)),
-                    ],
-                    const Spacer(),
-                    Text('₹${fmt.format(amt)}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            color: _payRed)),
-                    const SizedBox(width: 4),
-                    _actionMenu(p),
-                  ]),
-                );
-              }).toList(),
+                              fontSize: 11, color: Color(0xFF6B7280))),
+                      if ((p['presentDays'] ?? 0) > 0) ...[
+                        const SizedBox(width: 8),
+                        Text('${p['presentDays']}d',
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF2563EB),
+                                fontWeight: FontWeight.w500)),
+                      ],
+                      const Spacer(),
+                      Text('₹${fmt.format(amt)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              color: _payRed)),
+                      const SizedBox(width: 4),
+                      _actionMenu(p),
+                    ]),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
         ]),
       ),
     );
@@ -1150,25 +1309,29 @@ class _PaymentScreenState extends State<PaymentScreen>
     final fmt = NumberFormat('#,##0.##');
     final paid = double.tryParse('${item['amount']}') ?? 0;
 
-    // Labor-specific fields
-    final isLabor = category == 'labor';
-    final hasPeriod = isLabor && item['periodFrom'] != null && item['periodTo'] != null;
+    final isLabor     = category == 'labor';
+    final isTransport = category == 'transport';
+    final isExpense   = category == 'expense';
+
+    // Period — available for labor, transport and expense
+    final hasPeriod  = item['periodFrom'] != null && item['periodTo'] != null;
     final periodFrom = hasPeriod ? DateTime.parse(item['periodFrom'] as String) : null;
     final periodTo   = hasPeriod ? DateTime.parse(item['periodTo']   as String) : null;
     final dfmt = DateFormat('d MMM');
     final periodLabel = hasPeriod
         ? '${dfmt.format(periodFrom!)} – ${dfmt.format(periodTo!)}'
         : null;
-    final earnings           = ((item['earnings']           ?? 0) as num).toDouble();
-    final presentDays        = ((item['presentDays']        ?? 0) as num).toInt();
-    final prevOutstanding    = ((item['previousOutstanding'] ?? 0) as num).toDouble();
-    final weekOutstanding    = ((item['thisWeekOutstanding'] ?? 0) as num).toDouble();
-    final advAdj             = ((item['advanceAdjustment']  ?? 0) as num).toDouble();
 
-    // Non-labor pending (legacy totalDue field)
-    final totalDue  = double.tryParse('${item['totalDue'] ?? item['amount']}') ?? 0;
-    final pending   = !isLabor && totalDue > paid ? totalDue - paid : 0.0;
-    final hasPending = pending > 0;
+    // Shared outstanding fields (present on labor, transport, expense payments)
+    final prevOutstanding = ((item['previousOutstanding'] ?? 0) as num).toDouble();
+    final weekOutstanding = ((item['thisWeekOutstanding']  ?? 0) as num).toDouble();
+
+    // Labor-only fields
+    final earnings   = ((item['earnings']          ?? 0) as num).toDouble();
+    final presentDays= ((item['presentDays']        ?? 0) as num).toInt();
+    final advAdj     = ((item['advanceAdjustment']  ?? 0) as num).toDouble();
+
+    final hasOutstanding = weekOutstanding > 0 || prevOutstanding > 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1176,7 +1339,7 @@ class _PaymentScreenState extends State<PaymentScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: (hasPending || (isLabor && weekOutstanding > 0))
+            color: hasOutstanding
                 ? const Color(0xFFFBBF24).withValues(alpha: 0.5)
                 : const Color(0xFFE5E7EB)),
         boxShadow: [
@@ -1223,13 +1386,13 @@ class _PaymentScreenState extends State<PaymentScreen>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                      color: _payPurple.withValues(alpha: 0.08),
+                                      color: catColor.withValues(alpha: 0.08),
                                       borderRadius: BorderRadius.circular(6)),
                                   child: Text(periodLabel,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w500,
-                                          color: _payPurple)),
+                                          color: catColor)),
                                 ),
                               ] else ...[
                                 const SizedBox(width: 4),
@@ -1271,7 +1434,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             ]),
           ),
 
-          // ── Labor attendance breakdown ────────────────────────────────────
+          // ── Labor breakdown (days · earnings · advance · outstanding) ────────
           if (isLabor && hasPeriod) ...[
             Container(
               width: double.infinity,
@@ -1279,11 +1442,9 @@ class _PaymentScreenState extends State<PaymentScreen>
               decoration: BoxDecoration(
                 color: const Color(0xFFF5F3FF),
                 border: Border(
-                    top: BorderSide(
-                        color: _payPurple.withValues(alpha: 0.15))),
+                    top: BorderSide(color: _payPurple.withValues(alpha: 0.15))),
               ),
               child: Column(children: [
-                // Days + Earnings row
                 Row(children: [
                   _attCell(Icons.calendar_month_outlined,
                       '${presentDays}d worked', const Color(0xFF2563EB)),
@@ -1308,54 +1469,35 @@ class _PaymentScreenState extends State<PaymentScreen>
                     ],
                     if (weekOutstanding > 0)
                       _attCell(Icons.pending_actions_rounded,
-                          'Outstanding ₹${fmt.format(weekOutstanding)}',
-                          _payRed),
+                          'Outstanding ₹${fmt.format(weekOutstanding)}', _payRed),
                   ]),
                 ],
               ]),
             ),
           ],
 
-          // ── Non-labor pending footer ───────────────────────────────────────
-          if (hasPending)
+          // ── Transport / Expense outstanding strip ─────────────────────────
+          if ((isTransport || isExpense) && hasOutstanding) ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
+                color: catColor.withValues(alpha: 0.05),
                 border: Border(
-                    top: BorderSide(
-                        color: const Color(0xFFFBBF24).withValues(alpha: 0.4))),
+                    top: BorderSide(color: catColor.withValues(alpha: 0.2))),
               ),
               child: Row(children: [
-                const Icon(Icons.schedule_rounded, size: 12, color: _payAmber),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '₹${fmt.format(pending)} pending · Due ${DateFormat('d MMM yyyy').format(weekSunday)}',
-                    style: const TextStyle(
-                        fontSize: 11,
-                        color: _payAmber,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => _openForm(),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                        color: _payAmber,
-                        borderRadius: BorderRadius.circular(6)),
-                    child: const Text('Pay Now',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white)),
-                  ),
-                ),
+                if (prevOutstanding > 0) ...[
+                  _attCell(Icons.history_rounded,
+                      'Prev ₹${fmt.format(prevOutstanding)}', _payAmber),
+                  const SizedBox(width: 12),
+                ],
+                if (weekOutstanding > 0)
+                  _attCell(Icons.pending_actions_rounded,
+                      'Outstanding ₹${fmt.format(weekOutstanding)}', _payRed),
               ]),
             ),
+          ],
         ]),
       ),
     );
@@ -1501,6 +1643,15 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   final Set<String> _selectedVehicles = {};
   final _transportPayableCtrl = TextEditingController();
 
+  // Expense payment state
+  List _expenseItems = [];
+  bool _expenseLoading = false;
+  late DateTime _expenseFrom;
+  late DateTime _expenseTo;
+  double _expensePrevOutstanding = 0.0;
+  final Set<String> _selectedExpenseIds = {};
+  final _expensePayableCtrl = TextEditingController();
+
   double get _pendingAmt {
     final due = double.tryParse(_totalDueCtrl.text) ?? 0;
     final paying = double.tryParse(_amountCtrl.text) ?? 0;
@@ -1536,6 +1687,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     _laborTo = sunday.add(const Duration(days: 6));
     _transportFrom = sunday;
     _transportTo = sunday.add(const Duration(days: 6));
+    _expenseFrom = sunday;
+    _expenseTo = sunday.add(const Duration(days: 6));
     _loadDropdowns();
     if (widget.item != null) {
       final e = widget.item!;
@@ -1572,6 +1725,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     _descCtrl.dispose();
     _payableCtrl.dispose();
     _transportPayableCtrl.dispose();
+    _expensePayableCtrl.dispose();
     super.dispose();
   }
 
@@ -1669,6 +1823,70 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
 
   void _syncTransportPayable() {
     _transportPayableCtrl.text = _transportTotalCost.toStringAsFixed(2);
+  }
+
+  // ── Expense payment getters ───────────────────────────────────────────────
+  bool get _isExpenseMode => _type == 'paid' && _category == 'expense';
+
+  double get _expenseTotalAmount => _expenseItems
+      .where((e) => _selectedExpenseIds.contains(e['_id'].toString()))
+      .fold(0.0, (s, e) => s + ((e['amount'] ?? 0) as num).toDouble());
+
+  double get _expenseThisWeekOutstanding {
+    final payable = double.tryParse(_expensePayableCtrl.text) ?? _expenseTotalAmount;
+    return (_expensePrevOutstanding + _expenseTotalAmount - payable)
+        .clamp(0.0, double.infinity);
+  }
+
+  void _syncExpensePayable() {
+    _expensePayableCtrl.text = _expenseTotalAmount.toStringAsFixed(2);
+  }
+
+  Future<void> _loadExpenseItems() async {
+    setState(() {
+      _expenseLoading = true;
+      _expenseItems = [];
+      _selectedExpenseIds.clear();
+    });
+    final params = <String, String>{
+      if (_branchId != null) 'branch': _branchId!,
+      'from': _expenseFrom.toIso8601String(),
+      'to': DateTime(_expenseTo.year, _expenseTo.month, _expenseTo.day, 23, 59, 59)
+          .toIso8601String(),
+    };
+    final res = await ApiService.get('/expenses/payment-summary', params: params);
+    if (!mounted) return;
+    final list = (res['data'] as List? ?? []).toList();
+    setState(() {
+      _expenseItems = list;
+      _expenseLoading = false;
+      _expensePrevOutstanding =
+          ((res['previousOutstanding'] ?? 0) as num).toDouble();
+      _selectedExpenseIds.addAll(list.map((e) => e['_id'].toString()));
+    });
+    _syncExpensePayable();
+  }
+
+  Future<void> _pickExpenseDate({required bool isFrom}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom ? _expenseFrom : _expenseTo,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.light(primary: _payOrange)),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _expenseFrom = picked;
+      } else {
+        _expenseTo = picked;
+      }
+    });
   }
 
   Future<void> _loadTransportRecords({bool autoAdvanced = false}) async {
@@ -1936,6 +2154,56 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       return;
     }
 
+    // ── Expense batch payment ─────────────────────────────────────────────────
+    if (_isExpenseMode) {
+      final selected = _expenseItems
+          .where((e) => _selectedExpenseIds.contains(e['_id'].toString()))
+          .toList();
+      if (selected.isEmpty) {
+        showSnack(context, 'Select at least one expense', error: true);
+        setState(() => _saving = false);
+        return;
+      }
+      final totalPayable =
+          double.tryParse(_expensePayableCtrl.text) ?? _expenseTotalAmount;
+      final thisWeekOutstanding = double.parse(
+          (_expensePrevOutstanding + _expenseTotalAmount - totalPayable)
+              .clamp(0.0, double.infinity)
+              .toStringAsFixed(2));
+      final expenseIds = selected.map((e) => e['_id'].toString()).toList();
+      final label = selected.length == 1
+          ? (selected[0]['category'] ?? 'Expense').toString()
+          : 'Expenses (${selected.length})';
+      final body = <String, dynamic>{
+        'branch': _branchId,
+        'partyName': label,
+        'amount': double.parse(totalPayable.toStringAsFixed(2)),
+        'paymentMode': _mode,
+        'type': 'paid',
+        'category': 'expense',
+        'date': _date.toIso8601String(),
+        'referenceNo': _refCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'periodFrom': _expenseFrom.toIso8601String(),
+        'periodTo': _expenseTo.toIso8601String(),
+        'previousOutstanding': _expensePrevOutstanding,
+        'thisWeekOutstanding': thisWeekOutstanding,
+        'expenseIds': expenseIds,
+      };
+      final res = await ApiService.post('/payments', body);
+      if (mounted) {
+        setState(() => _saving = false);
+        if (res['success'] == true) {
+          showSnack(context,
+              'Payment recorded for ${selected.length} expense${selected.length == 1 ? '' : 's'}');
+          widget.onSaved();
+        } else {
+          showSnack(context, res['message'] ?? 'Save failed', error: true);
+        }
+      }
+      return;
+    }
+
     // ── Regular payment ───────────────────────────────────────────────────────
     final isOutgoing = _type == 'paid';
     final body = {
@@ -2080,6 +2348,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               _buildLaborSection(),
             ] else if (_isTransportMode && !_isEdit) ...[
               _buildTransportSection(),
+            ] else if (_isExpenseMode && !_isEdit) ...[
+              _buildExpenseSection(),
             ] else ...[
               // Employee selector (optional)
               AppDropdown<String>(
@@ -2247,7 +2517,9 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
                       ? _payPurple
                       : (_isTransportMode
                           ? _payBlue
-                          : (isOutgoing ? _payRed : _payGreen)),
+                          : (_isExpenseMode
+                              ? _payOrange
+                              : (isOutgoing ? _payRed : _payGreen))),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
@@ -2258,9 +2530,11 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
                         ? 'Record Payment for ${_selectedEmpIds.length} Employee${_selectedEmpIds.length == 1 ? '' : 's'}'
                         : (_isTransportMode
                             ? 'Record Payment for ${_selectedVehicles.length} Vehicle${_selectedVehicles.length == 1 ? '' : 's'}'
-                            : (_isEdit
-                                ? 'Update Payment'
-                                : (isOutgoing ? 'Record Payment' : 'Record Income')))),
+                            : (_isExpenseMode
+                                ? 'Pay ${_selectedExpenseIds.length} Expense${_selectedExpenseIds.length == 1 ? '' : 's'}'
+                                : (_isEdit
+                                    ? 'Update Payment'
+                                    : (isOutgoing ? 'Record Payment' : 'Record Income'))))),
               ),
             ),
           ]),
@@ -2976,6 +3250,351 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       ],
     ]);
   }
+
+  // ── Expense section ──────────────────────────────────────────────────────────
+  Widget _buildExpenseSection() {
+    final fmt = NumberFormat('#,##0.00');
+    final dfmt = DateFormat('dd MMM yyyy');
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Branch
+      AppDropdown<String>(
+        label: 'Branch',
+        value: _branchId,
+        items: [
+          const DropdownMenuItem<String>(
+              value: null, child: Text('All Branches')),
+          ..._branches.map<DropdownMenuItem<String>>((b) =>
+              DropdownMenuItem(value: b['_id'], child: Text(b['name']))),
+        ],
+        onChanged: (v) => setState(() {
+          _branchId = v;
+          _expenseItems = [];
+          _selectedExpenseIds.clear();
+        }),
+      ),
+      const SizedBox(height: 12),
+
+      // Date range + Load
+      Row(children: [
+        Expanded(
+          child: _expenseDatePicker(
+            label: dfmt.format(_expenseFrom),
+            onTap: () => _pickExpenseDate(isFrom: true),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _expenseDatePicker(
+            label: dfmt.format(_expenseTo),
+            onTap: () => _pickExpenseDate(isFrom: false),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: _expenseLoading ? null : _loadExpenseItems,
+            icon: _expenseLoading
+                ? const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.refresh, size: 16),
+            label: const Text('Load'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _payOrange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 12),
+
+      // Empty / loading / list
+      if (_expenseItems.isEmpty && !_expenseLoading) ...[
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: const Center(
+            child: Text(
+              'No unpaid expenses for this period',
+              style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+            ),
+          ),
+        ),
+      ] else if (_expenseLoading) ...[
+        const Center(
+            child: Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator())),
+      ] else ...[
+        // Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Checkbox(
+                value: _selectedExpenseIds.length == _expenseItems.length &&
+                    _expenseItems.isNotEmpty,
+                tristate: _selectedExpenseIds.isNotEmpty &&
+                    _selectedExpenseIds.length < _expenseItems.length,
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      _selectedExpenseIds.addAll(
+                          _expenseItems.map((e) => e['_id'].toString()));
+                    } else {
+                      _selectedExpenseIds.clear();
+                    }
+                  });
+                  _syncExpensePayable();
+                },
+                activeColor: _payOrange,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+                child: Text('Category / Description',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151)))),
+            const SizedBox(
+                width: 70,
+                child: Text('Date',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
+                    textAlign: TextAlign.center)),
+            const SizedBox(
+                width: 80,
+                child: Text('Amount',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF374151),
+                        fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.right)),
+          ]),
+        ),
+        // Rows
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius:
+                const BorderRadius.vertical(bottom: Radius.circular(10)),
+          ),
+          child: Column(
+            children: _expenseItems.asMap().entries.map((entry) {
+              final i = entry.key;
+              final item = entry.value;
+              final id = item['_id'].toString();
+              final selected = _selectedExpenseIds.contains(id);
+              final amount = ((item['amount'] ?? 0) as num).toDouble();
+              final dateStr = item['date'] != null
+                  ? DateFormat('dd MMM').format(DateTime.parse(item['date']).toLocal())
+                  : '';
+              return Container(
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _payOrange.withValues(alpha: 0.04)
+                      : Colors.white,
+                  border: i < _expenseItems.length - 1
+                      ? const Border(
+                          bottom: BorderSide(color: Color(0xFFF3F4F6)))
+                      : null,
+                ),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (selected) {
+                        _selectedExpenseIds.remove(id);
+                      } else {
+                        _selectedExpenseIds.add(id);
+                      }
+                    });
+                    _syncExpensePayable();
+                  },
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Checkbox(
+                          value: selected,
+                          onChanged: (v) {
+                            setState(() {
+                              if (v == true) {
+                                _selectedExpenseIds.add(id);
+                              } else {
+                                _selectedExpenseIds.remove(id);
+                              }
+                            });
+                            _syncExpensePayable();
+                          },
+                          activeColor: _payOrange,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: _payOrange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.receipt_long_outlined,
+                            size: 15, color: _payOrange),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item['category'] ?? '',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF111827)),
+                                  overflow: TextOverflow.ellipsis),
+                              if ((item['description'] ?? '').isNotEmpty)
+                                Text(item['description'],
+                                    style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Color(0xFF6B7280)),
+                                    overflow: TextOverflow.ellipsis),
+                            ]),
+                      ),
+                      SizedBox(
+                          width: 70,
+                          child: Text(dateStr,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFF6B7280)))),
+                      SizedBox(
+                          width: 80,
+                          child: Text('₹${fmt.format(amount)}',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF374151)))),
+                    ]),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Summary bar
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _payOrange.withValues(alpha: 0.3)),
+          ),
+          child: Column(children: [
+            if (_expensePrevOutstanding > 0) ...[
+              _summaryRow('Last Week Outstanding',
+                  '₹${fmt.format(_expensePrevOutstanding)}', _payRed),
+              const SizedBox(height: 6),
+            ],
+            _summaryRow('This Week Expenses',
+                '₹${fmt.format(_expenseTotalAmount)}', const Color(0xFF059669)),
+            const SizedBox(height: 8),
+            Row(children: [
+              const Expanded(
+                child: Text('Payable Amount',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF374151))),
+              ),
+              SizedBox(
+                width: 120,
+                child: TextFormField(
+                  controller: _expensePayableCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _payOrange),
+                  decoration: InputDecoration(
+                    prefixText: '₹',
+                    prefixStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _payOrange),
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide:
+                          BorderSide(color: _payOrange.withValues(alpha: 0.4)),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(6)),
+                      borderSide: BorderSide(color: _payOrange),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ]),
+            const Divider(height: 16, color: Color(0xFFFFD9B3)),
+            _summaryRow('This Week Outstanding',
+                '₹${fmt.format(_expenseThisWeekOutstanding)}',
+                const Color(0xFFF59E0B),
+                bold: true),
+          ]),
+        ),
+      ],
+    ]);
+  }
+
+  Widget _expenseDatePicker({required String label, required VoidCallback onTap}) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: _payOrange.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _payOrange),
+          ),
+          child: Row(children: [
+            const Icon(Icons.calendar_today_outlined, size: 13, color: _payOrange),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: _payOrange))),
+          ]),
+        ),
+      );
 
   Widget _transportDatePicker({required String label, required VoidCallback onTap}) =>
       GestureDetector(
