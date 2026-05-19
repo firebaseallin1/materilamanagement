@@ -18,6 +18,8 @@ import '../masters/expense_category_screen.dart';
 import '../masters/user_category_screen.dart';
 import '../masters/material_screen.dart';
 import '../masters/user_screen.dart';
+import '../masters/employee_screen.dart';
+import '../transactions/outstanding_screen.dart';
 import '../reports/reports_screen.dart';
 import '../../widgets/common_widgets.dart';
 
@@ -87,6 +89,52 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (screen != null) {
       Navigator.push(context, _slide(screen));
     }
+  }
+
+  Widget _accessDenied() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(Icons.lock_outline_rounded,
+                size: 32, color: Color(0xFFDC2626)),
+          ),
+          const SizedBox(height: 16),
+          const Text('Access Denied',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827))),
+          const SizedBox(height: 6),
+          const Text("You don't have permission to view this screen.",
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+          const SizedBox(height: 4),
+          const Text('Contact your administrator to request access.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _navIndex = 0),
+            icon: const Icon(Icons.dashboard_outlined, size: 16),
+            label: const Text('Go to Dashboard'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _kSidebar,
+              side: const BorderSide(color: Color(0xFFD1D5DB)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -169,21 +217,24 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildContent(bool isDesktop) {
+    final auth = context.read<AuthService>();
     switch (_navIndex) {
-      case 1: return const AttendanceScreen();
-      case 14: return const AdvanceScreen();
-      case 2: return const StockScreen();
-      case 3: return const TransportScreen();
-      case 4: return const ExpenseScreen();
-      case 5: return const PaymentScreen();
-      case 6: return const LocationScreen();
-      case 7: return const MaterialScreen();
-      case 8: return const UserScreen();
-      case 11: return const CategoryScreen();
-      case 12: return const ExpenseCategoryScreen();
-      case 13: return const UserCategoryScreen();
-      case 9: return const ReportsScreen();
-      case 10: return const BranchScreen();
+      case 1:  return auth.canAccess('attendance')  ? const AttendanceScreen()       : _accessDenied();
+      case 14: return auth.canAccess('advances')    ? const AdvanceScreen()          : _accessDenied();
+      case 2:  return auth.canAccess('stock')       ? const StockScreen()            : _accessDenied();
+      case 3:  return auth.canAccess('transport')   ? const TransportScreen()        : _accessDenied();
+      case 4:  return auth.canAccess('expenses')    ? const ExpenseScreen()          : _accessDenied();
+      case 5:  return auth.canAccess('payments')    ? const PaymentScreen()          : _accessDenied();
+      case 6:  return auth.canAccess('location')    ? const LocationScreen()         : _accessDenied();
+      case 7:  return auth.canAccess('materials')   ? const MaterialScreen()         : _accessDenied();
+      case 8:  return auth.canAccess('users')       ? const UserScreen()             : _accessDenied();
+      case 11: return auth.canAccess('category')    ? const CategoryScreen()         : _accessDenied();
+      case 12: return auth.canAccess('expense_cat') ? const ExpenseCategoryScreen()  : _accessDenied();
+      case 13: return auth.canAccess('user_cat')    ? const UserCategoryScreen()     : _accessDenied();
+      case 9:  return auth.canAccess('reports')     ? const ReportsScreen()          : _accessDenied();
+      case 10: return auth.canAccess('branches')    ? const BranchScreen()           : _accessDenied();
+      case 15: return auth.canAccess('employees')   ? const EmployeeScreen()         : _accessDenied();
+      case 16: return auth.canAccess('outstanding') ? const OutstandingScreen()      : _accessDenied();
     }
 
     if (_loading) {
@@ -412,26 +463,33 @@ class _SidebarContent extends StatelessWidget {
               _sectionLabel('MAIN'),
               _navItem(0, Icons.dashboard_outlined, 'Dashboard', null),
               const SizedBox(height: 8),
-              _sectionLabel('OPERATIONS'),
-              _navItem(1, Icons.how_to_reg_outlined, 'Attendance', null),
-              _navItem(14, Icons.account_balance_wallet_outlined, 'Advances', null),
-              _navItem(2, Icons.inventory_2_outlined, 'Material Stock', null),
-              _navItem(3, Icons.local_shipping_outlined, 'Transport Detail', null),
-              _navItem(4, Icons.receipt_long_outlined, 'Expenses', null),
-              _navItem(5, Icons.payment_outlined, 'Payments', null),
-              const SizedBox(height: 8),
-              _sectionLabel('MASTERS'),
-              _navItem(10, Icons.store_outlined, 'Branches', null),
-              _navItem(6, Icons.location_on_outlined, 'Location', null),
-              _navItem(11, Icons.category_outlined, 'Category', null),
-              _navItem(12, Icons.receipt_long_outlined, 'Expense Category', null),
-              _navItem(13, Icons.label_outline_rounded, 'User Category', null),
-              _navItem(7, Icons.widgets_outlined, 'Material', null),
-              if (auth.isAdmin)
-                _navItem(8, Icons.people_outline, 'Users', null),
-              const SizedBox(height: 8),
-              _sectionLabel('REPORTS'),
-              _navItem(9, Icons.bar_chart_outlined, 'Overall Report', null),
+              if (_hasAny(auth, ['attendance','advances','outstanding','stock','transport','expenses','payments'])) ...[
+                _sectionLabel('OPERATIONS'),
+                if (auth.canAccess('attendance'))   _navItem(1,  Icons.how_to_reg_outlined,              'Attendance',        null),
+                if (auth.canAccess('advances'))     _navItem(14, Icons.account_balance_wallet_outlined,   'Advances',          null),
+                if (auth.canAccess('outstanding'))  _navItem(16, Icons.account_balance_outlined,          'Outstanding',       null),
+                if (auth.canAccess('stock'))       _navItem(2,  Icons.inventory_2_outlined,              'Material Stock',    null),
+                if (auth.canAccess('transport'))   _navItem(3,  Icons.local_shipping_outlined,           'Transport Detail',  null),
+                if (auth.canAccess('expenses'))    _navItem(4,  Icons.receipt_long_outlined,             'Expenses',          null),
+                if (auth.canAccess('payments'))    _navItem(5,  Icons.payment_outlined,                  'Payments',          null),
+                const SizedBox(height: 8),
+              ],
+              if (_hasAny(auth, ['branches','location','category','expense_cat','user_cat','materials','employees','users'])) ...[
+                _sectionLabel('MASTERS'),
+                if (auth.canAccess('branches'))    _navItem(10, Icons.store_outlined,                    'Branches',          null),
+                if (auth.canAccess('location'))    _navItem(6,  Icons.location_on_outlined,              'Location',          null),
+                if (auth.canAccess('category'))    _navItem(11, Icons.category_outlined,                 'Category',          null),
+                if (auth.canAccess('expense_cat')) _navItem(12, Icons.receipt_long_outlined,             'Expense Category',  null),
+                if (auth.canAccess('user_cat'))    _navItem(13, Icons.label_outline_rounded,             'User Category',     null),
+                if (auth.canAccess('materials'))   _navItem(7,  Icons.widgets_outlined,                  'Material',          null),
+                if (auth.canAccess('employees'))   _navItem(15, Icons.badge_outlined,                    'Employees',         null),
+                if (auth.canAccess('users'))       _navItem(8,  Icons.people_outline,                    'Users',             null),
+                const SizedBox(height: 8),
+              ],
+              if (auth.canAccess('reports')) ...[
+                _sectionLabel('REPORTS'),
+                _navItem(9, Icons.bar_chart_outlined, 'Overall Report', null),
+              ],
             ],
           ),
         ),
@@ -478,6 +536,9 @@ class _SidebarContent extends StatelessWidget {
       ]),
     );
   }
+
+  bool _hasAny(AuthService auth, List<String> keys) =>
+      keys.any((k) => auth.canAccess(k));
 
   Widget _sectionLabel(String label) {
     return Padding(

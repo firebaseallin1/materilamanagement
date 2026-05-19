@@ -42,7 +42,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _loadDropdownData() async {
     final results = await Future.wait([
       ApiService.get('/branches'),
-      ApiService.get('/users'),
+      ApiService.get('/employees'),
     ]);
     if (mounted) setState(() {
       _branches = results[0]['data'] ?? [];
@@ -341,12 +341,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             borderRadius: BorderRadius.circular(8),
             items: [
               const DropdownMenuItem(value: null, child: Text('All Employees')),
-              ..._employees.map((u) {
-                    final active = u['isActive'] ?? true;
-                    final name = u['name'] as String? ?? '';
+              ..._employees.map((e) {
+                    final active = e['isActive'] ?? true;
+                    final name = e['name'] as String? ?? '';
+                    final code = e['empCode'] as String?;
+                    final label = code != null && code.isNotEmpty ? '$name ($code)' : name;
                     return DropdownMenuItem(
-                      value: u['_id'] as String,
-                      child: Text(active ? name : '$name (Inactive)',
+                      value: e['_id'] as String,
+                      child: Text(active ? label : '$label (Inactive)',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: active ? null : Colors.grey)),
                     );
@@ -718,7 +720,7 @@ class AttendanceFormPanel extends StatefulWidget {
 
 class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
   final _formKey = GlobalKey<FormState>();
-  List _users = [], _branches = [];
+  List _employees = [], _branches = [];
   String? _employeeId, _branchId;
   final _remarksCtrl = TextEditingController();
   final _otHoursCtrl = TextEditingController();
@@ -755,8 +757,8 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
   }
 
   Future<void> _loadDropdowns() async {
-    final results = await Future.wait([ApiService.get('/users'), ApiService.get('/branches')]);
-    if (mounted) setState(() { _users = results[0]['data'] ?? []; _branches = results[1]['data'] ?? []; });
+    final results = await Future.wait([ApiService.get('/employees'), ApiService.get('/branches')]);
+    if (mounted) setState(() { _employees = results[0]['data'] ?? []; _branches = results[1]['data'] ?? []; });
   }
 
   Future<void> _save() async {
@@ -872,12 +874,14 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 decoration: _dec('Employee', Icons.person_outline_rounded),
                 style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
-                items: _users.map<DropdownMenuItem<String>>((u) {
-                  final active = u['isActive'] ?? true;
-                  final name = u['name'] as String? ?? '';
+                items: _employees.map<DropdownMenuItem<String>>((e) {
+                  final active = e['isActive'] ?? true;
+                  final name = e['name'] as String? ?? '';
+                  final code = e['empCode'] as String?;
+                  final label = code != null && code.isNotEmpty ? '$name ($code)' : name;
                   return DropdownMenuItem(
-                    value: u['_id'] as String,
-                    child: Text(active ? name : '$name (Inactive)',
+                    value: e['_id'] as String,
+                    child: Text(active ? label : '$label (Inactive)',
                         style: TextStyle(color: active ? null : Colors.grey)),
                   );
                 }).toList(),

@@ -37,7 +37,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
   Future<void> _loadDropdownData() async {
     final results = await Future.wait([
       ApiService.get('/branches'),
-      ApiService.get('/users'),
+      ApiService.get('/employees'),
     ]);
     if (mounted) {
       setState(() {
@@ -304,12 +304,14 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           borderRadius: BorderRadius.circular(8),
           items: [
             const DropdownMenuItem(value: null, child: Text('All Employees')),
-            ..._employees.map((u) {
-              final active = u['isActive'] ?? true;
-              final name = u['name'] as String? ?? '';
+            ..._employees.map((emp) {
+              final active = emp['isActive'] ?? true;
+              final name = emp['name'] as String? ?? '';
+              final code = emp['empCode'] as String? ?? '';
+              final label = code.isNotEmpty ? '$name ($code)' : name;
               return DropdownMenuItem(
-                value: u['_id'] as String,
-                child: Text(active ? name : '$name (Inactive)',
+                value: emp['_id'] as String,
+                child: Text(active ? label : '$label – Inactive',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: active ? null : Colors.grey)),
               );
@@ -563,12 +565,14 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
             const SizedBox(width: 10),
             Expanded(
                 flex: 3,
-                child: Text(item['employee']?['name'] ?? '—',
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF111827)),
-                    overflow: TextOverflow.ellipsis)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(item['employee']?['name'] ?? '—',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF111827)),
+                      overflow: TextOverflow.ellipsis),
+                  if ((item['employee']?['empCode'] ?? '').toString().isNotEmpty)
+                    Text(item['employee']?['empCode'] ?? '',
+                        style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))),
+                ])),
             Expanded(
                 flex: 2,
                 child: Text(item['branch']?['name'] ?? '—',
@@ -870,7 +874,7 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
 
   Future<void> _loadDropdowns() async {
     final results = await Future.wait(
-        [ApiService.get('/users'), ApiService.get('/branches')]);
+        [ApiService.get('/employees'), ApiService.get('/branches')]);
     if (mounted) {
       setState(() {
         _users = results[0]['data'] ?? [];
@@ -1012,19 +1016,22 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
                     DropdownButtonFormField<String>(
                       initialValue: _employeeId,
                       decoration:
-                          _dec('Employee', Icons.person_outline_rounded),
+                          _dec('Employee', Icons.badge_outlined),
                       style: const TextStyle(
                           fontSize: 13, color: Color(0xFF1A1A2E)),
                       borderRadius: BorderRadius.circular(10),
                       isExpanded: true,
-                      items: _users.map<DropdownMenuItem<String>>((u) {
-                        final active = u['isActive'] ?? true;
-                        final name = u['name'] as String? ?? '';
+                      hint: const Text('Select Employee'),
+                      items: _users.map<DropdownMenuItem<String>>((emp) {
+                        final active = emp['isActive'] ?? true;
+                        final name = emp['name'] as String? ?? '';
+                        final code = emp['empCode'] as String? ?? '';
+                        final label = code.isNotEmpty ? '$name ($code)' : name;
                         return DropdownMenuItem(
-                          value: u['_id'] as String,
-                          child: Text(active ? name : '$name (Inactive)',
-                              style: TextStyle(
-                                  color: active ? null : Colors.grey)),
+                          value: emp['_id'] as String,
+                          child: Text(active ? label : '$label – Inactive',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: active ? null : Colors.grey)),
                         );
                       }).toList(),
                       onChanged: (v) => setState(() => _employeeId = v),

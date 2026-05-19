@@ -49,4 +49,16 @@ class AuthService extends ChangeNotifier {
   bool get isAdmin => currentUser?['role'] == 'admin';
   String get userName => currentUser?['name'] ?? 'User';
   String get userRole => currentUser?['role'] ?? 'user';
+
+  List<String> get allowedScreens {
+    if (isAdmin) return const [];  // admin bypasses checks
+    final perms = currentUser?['userCategory']?['permissions'];
+    if (perms is List) return List<String>.from(perms);
+    return const [];  // no category → no access
+  }
+
+  bool canAccess(String key) {
+    if (isAdmin) return true;
+    return allowedScreens.contains(key);
+  }
 }

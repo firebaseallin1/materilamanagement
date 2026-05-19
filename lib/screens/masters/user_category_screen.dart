@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../constants/screen_permissions.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
@@ -291,10 +292,9 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
           SizedBox(width: 28, child: Text('#', style: _kUCHdr)),
           SizedBox(width: 12),
           Expanded(flex: 3, child: Text('Category Name', style: _kUCHdr)),
-          Expanded(flex: 4, child: Text('Description', style: _kUCHdr)),
-          SizedBox(
-              width: 88,
-              child: Text('Status', style: _kUCHdr, textAlign: TextAlign.center)),
+          Expanded(flex: 3, child: Text('Description', style: _kUCHdr)),
+          SizedBox(width: 80, child: Text('Screens', style: _kUCHdr, textAlign: TextAlign.center)),
+          SizedBox(width: 88, child: Text('Status', style: _kUCHdr, textAlign: TextAlign.center)),
           SizedBox(width: 40),
         ]),
       ),
@@ -330,7 +330,7 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
             const SizedBox(width: 12),
             Expanded(flex: 3, child: _nameCell(c, index)),
             Expanded(
-              flex: 4,
+              flex: 3,
               child: Text(
                 (c['description'] as String? ?? '').isEmpty
                     ? '—'
@@ -343,6 +343,7 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            SizedBox(width: 80, child: Center(child: _permsBadge(c))),
             SizedBox(
                 width: 88,
                 child: Center(child: _statusBadge(isActive == true))),
@@ -405,7 +406,15 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
             ]),
           ),
           const SizedBox(width: 8),
-          _statusBadge(isActive == true),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _statusBadge(isActive == true),
+              const SizedBox(height: 4),
+              _permsBadge(c),
+            ],
+          ),
           _actionMenu(c),
         ]),
       ),
@@ -450,6 +459,27 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
               fontWeight: FontWeight.w700,
               fontSize: size * 0.42),
         ),
+      ),
+    );
+  }
+
+  Widget _permsBadge(Map c) {
+    final perms = c['permissions'];
+    final count = perms is List ? perms.length : 0;
+    final total = kAllScreens.length;
+    final hasPerms = count > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: hasPerms ? const Color(0xFFEDE9FE) : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        hasPerms ? '$count / $total' : 'None',
+        style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: hasPerms ? const Color(0xFF6D28D9) : const Color(0xFF9CA3AF)),
       ),
     );
   }
@@ -640,6 +670,7 @@ class _UserCategoryFormPanelState extends State<UserCategoryFormPanel> {
   final _descCtrl = TextEditingController();
   bool _saving = false;
   bool _isActive = true;
+  Set<String> _permissions = {};
 
   static const _primary = Color(0xFF0C2D3F);
   static const _accent = Color(0xFF0D9488);
@@ -655,6 +686,8 @@ class _UserCategoryFormPanelState extends State<UserCategoryFormPanel> {
       _nameCtrl.text = widget.category!['name'] ?? '';
       _descCtrl.text = widget.category!['description'] ?? '';
       _isActive = widget.category!['isActive'] ?? true;
+      final perms = widget.category!['permissions'];
+      if (perms is List) _permissions = Set<String>.from(perms);
     }
   }
 
@@ -672,6 +705,7 @@ class _UserCategoryFormPanelState extends State<UserCategoryFormPanel> {
       'name': _nameCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
       'isActive': _isActive,
+      'permissions': _permissions.toList(),
     };
     final res = !_isEdit
         ? await ApiService.post('/user-categories', body)
@@ -715,6 +749,105 @@ class _UserCategoryFormPanelState extends State<UserCategoryFormPanel> {
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: Colors.red, width: 1.5)),
       );
+
+  Widget _permissionsEditor() {
+    final sections = <String, List<ScreenDef>>{};
+    for (final s in kAllScreens) {
+      sections.putIfAbsent(s.section, () => []).add(s);
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9F8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFDDE3E0)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(children: [
+            Icon(Icons.security_outlined, size: 16, color: _accent),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Screen Access Permissions',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151))),
+            ),
+            TextButton(
+              onPressed: () => setState(() {
+                if (_permissions.length == kAllScreens.length) {
+                  _permissions = {};
+                } else {
+                  _permissions = kAllScreens.map((s) => s.key).toSet();
+                }
+              }),
+              style: TextButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                _permissions.length == kAllScreens.length ? 'Clear All' : 'Select All',
+                style: TextStyle(fontSize: 11, color: _accent),
+              ),
+            ),
+          ]),
+        ),
+        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+        ...sections.entries.map((entry) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Text(entry.key.toUpperCase(),
+                  style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF9CA3AF),
+                      letterSpacing: 0.8)),
+            ),
+            ...entry.value.map((screen) => InkWell(
+              onTap: () => setState(() {
+                if (_permissions.contains(screen.key)) {
+                  _permissions.remove(screen.key);
+                } else {
+                  _permissions.add(screen.key);
+                }
+              }),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                child: Row(children: [
+                  Checkbox(
+                    value: _permissions.contains(screen.key),
+                    onChanged: (v) => setState(() {
+                      if (v == true) {
+                        _permissions.add(screen.key);
+                      } else {
+                        _permissions.remove(screen.key);
+                      }
+                    }),
+                    activeColor: _accent,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(screen.label,
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: _permissions.contains(screen.key)
+                              ? const Color(0xFF111827)
+                              : const Color(0xFF6B7280))),
+                ]),
+              ),
+            )),
+            const SizedBox(height: 4),
+          ],
+        )),
+        const SizedBox(height: 4),
+      ]),
+    );
+  }
 
   Widget _activeToggle() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -813,6 +946,8 @@ class _UserCategoryFormPanelState extends State<UserCategoryFormPanel> {
             ),
             const SizedBox(height: 14),
             _activeToggle(),
+            const SizedBox(height: 20),
+            _permissionsEditor(),
             const SizedBox(height: 28),
             Row(children: [
               Expanded(

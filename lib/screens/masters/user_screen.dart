@@ -1048,6 +1048,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
 
   String? _branchId;
   String? _userCategoryId;
+  String? _employeeId;
   bool _saving = false;
   bool _isActive = true;
   bool _obscurePass = true;
@@ -1055,6 +1056,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
   String? _photoBase64;
   String? _generatedUserId;
   bool _generatingId = false;
+  List _employees = [];
 
   static const _primary = Color(0xFF1B3A27);
   static const _accent = Color(0xFF16A34A);
