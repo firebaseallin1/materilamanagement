@@ -676,12 +676,8 @@ class _TransportScreenState extends State<TransportScreen> {
                 ? (item['vehicleName'] ?? '—')
                 : (item['vehicleNo'] ?? '—');
             final driver = (item['driverName'] ?? '—').toString();
-            final from = isStockMove
-                ? (item['fromBranch']?['name'] ?? '—')
-                : (item['fromLocation']?['name'] ?? '—');
-            final to = isStockMove
-                ? (item['toBranch']?['name'] ?? '—')
-                : (item['toLocation']?['name'] ?? '—');
+            final from = (item['fromBranch']?['name'] ?? '—').toString();
+            final to = (item['toBranch']?['name'] ?? '—').toString();
             final material = (item['material']?['name'] ?? '—').toString();
             final qty = item['quantity'];
             final cost = item['cost'];
@@ -936,12 +932,8 @@ class _TransportScreenState extends State<TransportScreen> {
             ? (item['vehicleName'] ?? '—').toString()
             : (item['vehicleNo'] ?? '—').toString();
         final driver = (item['driverName'] ?? '').toString();
-        final from = isStockMove
-            ? (item['fromBranch']?['name'] ?? '—').toString()
-            : (item['fromLocation']?['name'] ?? '—').toString();
-        final to = isStockMove
-            ? (item['toBranch']?['name'] ?? '—').toString()
-            : (item['toLocation']?['name'] ?? '—').toString();
+        final from = (item['fromBranch']?['name'] ?? '—').toString();
+        final to = (item['toBranch']?['name'] ?? '—').toString();
         final cost = item['cost'];
         final distance = item['distance'];
         final material = item['material']?['name']?.toString();
@@ -1268,8 +1260,8 @@ class TransportFormPanel extends StatefulWidget {
 
 class _TransportFormPanelState extends State<TransportFormPanel> {
   final _formKey = GlobalKey<FormState>();
-  List _locations = [], _materials = [];
-  String? _fromLoc, _toLoc, _materialId;
+  List _branches = [], _materials = [];
+  String? _fromBranch, _toBranch, _materialId;
   final _transportNameCtrl = TextEditingController();
   final _vehicleCtrl = TextEditingController();
   final _driverCtrl = TextEditingController();
@@ -1286,8 +1278,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
     _loadDropdowns();
     if (widget.item != null) {
       final e = widget.item!;
-      _fromLoc = e['fromLocation']?['_id'];
-      _toLoc = e['toLocation']?['_id'];
+      _fromBranch = e['fromBranch']?['_id'];
+      _toBranch = e['toBranch']?['_id'];
       _materialId = e['material']?['_id'];
       _transportNameCtrl.text = e['transportName'] ?? '';
       _vehicleCtrl.text = e['vehicleNo'] ?? '';
@@ -1313,11 +1305,11 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
   }
 
   Future<void> _loadDropdowns() async {
-    final [lRes, mRes] = await Future.wait(
-        [ApiService.get('/locations'), ApiService.get('/materials')]);
+    final [bRes, mRes] = await Future.wait(
+        [ApiService.get('/branches'), ApiService.get('/materials')]);
     if (mounted)
       setState(() {
-        _locations = lRes['data'] ?? [];
+        _branches = bRes['data'] ?? [];
         _materials = mRes['data'] ?? [];
       });
   }
@@ -1329,8 +1321,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
       'transportName': _transportNameCtrl.text.trim(),
       'vehicleNo': _vehicleCtrl.text.trim(),
       'driverName': _driverCtrl.text.trim(),
-      'fromLocation': _fromLoc,
-      'toLocation': _toLoc,
+      'fromBranch': _fromBranch,
+      'toBranch': _toBranch,
       'material': _materialId,
       'quantity': double.tryParse(_qtyCtrl.text),
       'distance': double.tryParse(_distCtrl.text),
@@ -1481,6 +1473,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
                 controller: _transportNameCtrl,
                 decoration: _dec('Transport Name', Icons.business_outlined,
                     hint: 'e.g. KPS Transport'),
+                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 12),
               Row(children: [
@@ -1507,33 +1500,32 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
               // ── Route ───────────────────────────────────────────────────
               _sectionLabel('Route', Icons.alt_route_outlined),
               DropdownButtonFormField<String>(
-                key: ValueKey('from_$_fromLoc'),
-                initialValue: _fromLoc,
-                decoration: _dec('From Location', Icons.location_on_outlined),
+                key: ValueKey('from_$_fromBranch'),
+                initialValue: _fromBranch,
+                decoration: _dec('From Branch', Icons.account_tree_outlined),
                 style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
                 isExpanded: true,
-                items: _locations
-                    .map<DropdownMenuItem<String>>((l) => DropdownMenuItem(
-                        value: l['_id'], child: Text(l['name'])))
+                items: _branches
+                    .map<DropdownMenuItem<String>>((b) => DropdownMenuItem(
+                        value: b['_id'], child: Text(b['name'])))
                     .toList(),
-                onChanged: (v) => setState(() => _fromLoc = v),
+                onChanged: (v) => setState(() => _fromBranch = v),
                 validator: (v) => v == null ? 'Required' : null,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                key: ValueKey('to_$_toLoc'),
-                initialValue: _toLoc,
-                decoration:
-                    _dec('To Location', Icons.location_searching_outlined),
+                key: ValueKey('to_$_toBranch'),
+                initialValue: _toBranch,
+                decoration: _dec('To Branch', Icons.account_tree_outlined),
                 style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
                 borderRadius: BorderRadius.circular(10),
                 isExpanded: true,
-                items: _locations
-                    .map<DropdownMenuItem<String>>((l) => DropdownMenuItem(
-                        value: l['_id'], child: Text(l['name'])))
+                items: _branches
+                    .map<DropdownMenuItem<String>>((b) => DropdownMenuItem(
+                        value: b['_id'], child: Text(b['name'])))
                     .toList(),
-                onChanged: (v) => setState(() => _toLoc = v),
+                onChanged: (v) => setState(() => _toBranch = v),
                 validator: (v) => v == null ? 'Required' : null,
               ),
               const SizedBox(height: 20),
