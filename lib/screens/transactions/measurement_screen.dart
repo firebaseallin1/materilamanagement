@@ -42,28 +42,29 @@ class _MeasRow {
   });
 
   factory _MeasRow.fromMap(Map r) {
-    int lFt, lIn, dFt, dIn;
+    int lFt, dFt;
+    double lIn, dIn;
     if (r['lFt'] != null) {
       lFt = (r['lFt'] as num).toInt();
-      lIn = (r['lIn'] as num? ?? 0).toInt();
+      lIn = (r['lIn'] as num? ?? 0).toDouble();
     } else {
       final l = (r['l'] as num?)?.toDouble() ?? 0;
       lFt = l.floor();
-      lIn = ((l - lFt) * 12).round().clamp(0, 11);
+      lIn = ((l - lFt) * 12).clamp(0, 11).toDouble();
     }
     if (r['dFt'] != null) {
       dFt = (r['dFt'] as num).toInt();
-      dIn = (r['dIn'] as num? ?? 0).toInt();
+      dIn = (r['dIn'] as num? ?? 0).toDouble();
     } else {
       final d = (r['d'] as num?)?.toDouble() ?? 0;
       dFt = d.floor();
-      dIn = ((d - dFt) * 12).round().clamp(0, 11);
+      dIn = ((d - dFt) * 12).clamp(0, 11).toDouble();
     }
     return _MeasRow._raw(
       lFtCtrl:   TextEditingController(text: lFt > 0 ? lFt.toString() : ''),
-      lInCtrl:   TextEditingController(text: lIn.toString()),
+      lInCtrl:   TextEditingController(text: _s(lIn)),
       dFtCtrl:   TextEditingController(text: dFt > 0 ? dFt.toString() : ''),
-      dInCtrl:   TextEditingController(text: dIn.toString()),
+      dInCtrl:   TextEditingController(text: _s(dIn)),
       nosCtrl:   TextEditingController(text: _s(r['nos'] ?? 1)),
       totalCtrl: TextEditingController(text: _s(r['total'])),
       beamCtrl:  TextEditingController(text: (r['beamNo'] ?? '') as String),
@@ -111,9 +112,9 @@ class _MeasRow {
 
   Map<String, dynamic> toJson() => {
         'lFt':   int.tryParse(lFtCtrl.text) ?? 0,
-        'lIn':   int.tryParse(lInCtrl.text) ?? 0,
+        'lIn':   double.tryParse(lInCtrl.text) ?? 0.0,
         'dFt':   int.tryParse(dFtCtrl.text) ?? 0,
-        'dIn':   int.tryParse(dInCtrl.text) ?? 0,
+        'dIn':   double.tryParse(dInCtrl.text) ?? 0.0,
         'l':     _lDecimal,
         'd':     _dDecimal,
         'nos':   double.tryParse(nosCtrl.text) ?? 1,
@@ -728,33 +729,36 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
     final gross = _gross(item);
     final openVal = _openAmt(item);
     final net = gross - openVal;
+    final rate = (item['amount'] as num?)?.toDouble() ?? 0;
+    final totalValue = (item['totalAmount'] as num?)?.toDouble() ??
+        (rate > 0 ? net * rate : 0);
     final insideCount =
         allRows.where((r) => (r['type'] ?? '') != 'open').length;
     final openCount = allRows.where((r) => (r['type'] ?? '') == 'open').length;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: () => _openForm(item),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           hoverColor: const Color(0xFFF0F9F4),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFE5E7EB)),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2)),
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1)),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               child: IntrinsicHeight(
                 child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -762,29 +766,31 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                       Container(width: 4, color: color),
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+                          padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
                           child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
+                                // ── Row 1: date | location | menu ──────
                                 Row(children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 7, vertical: 3),
+                                        horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: color.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(5),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(date,
                                         style: TextStyle(
-                                            fontSize: 11,
+                                            fontSize: 10,
                                             fontWeight: FontWeight.w600,
                                             color: color)),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 7),
                                   Expanded(
                                     child: Text(location,
                                         style: const TextStyle(
-                                            fontSize: 14,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w700,
                                             color: Color(0xFF111827)),
                                         overflow: TextOverflow.ellipsis),
@@ -793,18 +799,19 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                                 ]),
                                 if (site.isNotEmpty)
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 3),
+                                    padding: const EdgeInsets.only(top: 2),
                                     child: Row(children: [
                                       const Icon(Icons.location_on_outlined,
-                                          size: 11, color: Color(0xFF9CA3AF)),
+                                          size: 10, color: Color(0xFF9CA3AF)),
                                       const SizedBox(width: 3),
                                       Text(site,
                                           style: const TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 11,
                                               color: Color(0xFF6B7280))),
                                     ]),
                                   ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
+                                // ── Row 2: chips | net qty + total amt ─
                                 Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
@@ -812,39 +819,69 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                                       if (floor.isNotEmpty)
                                         _chip(Icons.layers_outlined, floor),
                                       if (villa.isNotEmpty) ...[
-                                        const SizedBox(width: 5),
-                                        _chip(Icons.home_outlined,
-                                            'Villa $villa'),
+                                        const SizedBox(width: 4),
+                                        _chip(Icons.home_outlined, 'Villa $villa'),
                                       ],
                                       if (remark.isNotEmpty) ...[
-                                        const SizedBox(width: 5),
+                                        const SizedBox(width: 4),
                                         _chip(Icons.notes_rounded, remark),
                                       ],
                                       const Spacer(),
-                                      Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(_fmtQ(net),
-                                                style: const TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: _msGreen)),
-                                            const Text('Net qty',
-                                                style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: Color(0xFF9CA3AF))),
-                                          ]),
+                                      // Net qty and Total Amt side by side
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(_fmtQ(net),
+                                                  style: const TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: _msGreen)),
+                                              const Text('Net qty',
+                                                  style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: Color(0xFF9CA3AF))),
+                                            ],
+                                          ),
+                                          if (totalValue > 0) ...[
+                                            Container(
+                                              margin: const EdgeInsets.only(left: 8),
+                                              width: 1,
+                                              height: 28,
+                                              color: const Color(0xFFE5E7EB),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text('₹${_fmtQ(totalValue)}',
+                                                    style: const TextStyle(
+                                                        fontSize: 15,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Color(0xFFEA580C))),
+                                                const Text('Total Amt',
+                                                    style: TextStyle(
+                                                        fontSize: 9,
+                                                        color: Color(0xFF9CA3AF))),
+                                              ],
+                                            ),
+                                          ],
+                                        ],
+                                      ),
                                     ]),
                                 if (allRows.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  const Divider(
-                                      height: 1, color: Color(0xFFF3F4F6)),
                                   const SizedBox(height: 5),
+                                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                                  const SizedBox(height: 4),
                                   Row(children: [
                                     _statBadge('$insideCount inside', _msGreen),
                                     if (openCount > 0) ...[
-                                      const SizedBox(width: 5),
+                                      const SizedBox(width: 4),
                                       _statBadge('$openCount open(−)', _msRed),
                                     ],
                                     const Spacer(),
@@ -852,7 +889,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                                       Text(
                                         '${_fmtQ(gross)} − ${_fmtQ(openVal)}',
                                         style: const TextStyle(
-                                            fontSize: 11,
+                                            fontSize: 10,
                                             color: Color(0xFF9CA3AF)),
                                       ),
                                   ]),
@@ -982,6 +1019,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   final _floorCtrl = TextEditingController();
   final _villaCtrl = TextEditingController();
   final _remarkCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
   DateTime _date = DateTime.now();
   final List<_MeasRow> _rows = [];
   bool _saving = false;
@@ -998,6 +1036,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
       _floorCtrl.text = (e['floor'] ?? '') as String;
       _villaCtrl.text = (e['villaNo'] ?? '') as String;
       _remarkCtrl.text = (e['remark'] ?? '') as String;
+      final amt = (e['amount'] as num?)?.toDouble() ?? 0;
+      if (amt > 0) _amountCtrl.text = _MeasRow._s(amt);
       if (e['date'] != null) _date = DateTime.parse(e['date'] as String);
       for (final r in (e['rows'] as List? ?? [])) {
         _rows.add(_MeasRow.fromMap(r as Map));
@@ -1013,6 +1053,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     _floorCtrl.dispose();
     _villaCtrl.dispose();
     _remarkCtrl.dispose();
+    _amountCtrl.dispose();
     for (final r in _rows) {
       r.dispose();
     }
@@ -1022,6 +1063,19 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   Future<void> _loadBranches() async {
     final res = await ApiService.get('/branches');
     if (mounted) setState(() => _branches = res['data'] ?? []);
+  }
+
+  void _onBranchChanged(String? id) {
+    setState(() => _branchId = id);
+    if (id == null) return;
+    final branch = _branches.firstWhere(
+        (b) => b['_id'] == id, orElse: () => {});
+    if (branch.isEmpty) return;
+    final locationObj = branch['location'];
+    final loc = locationObj is Map
+        ? ((locationObj['name'] ?? locationObj['address'] ?? '') as String).trim()
+        : '';
+    if (loc.isNotEmpty) setState(() => _locationCtrl.text = loc);
   }
 
   void _addRow([String type = 'inside']) =>
@@ -1041,10 +1095,12 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
       .fold(0.0, (s, r) => s + (double.tryParse(r.totalCtrl.text) ?? 0));
 
   double get _netTotal => _grossTotal - _openTotal;
+  double get _totalValue =>
+      _netTotal * (double.tryParse(_amountCtrl.text) ?? 0);
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final rate = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final body = {
       if (_branchId != null) 'branch': _branchId,
       'location': _locationCtrl.text.trim(),
@@ -1052,6 +1108,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
       'floor': _floorCtrl.text.trim(),
       'villaNo': _villaCtrl.text.trim(),
       'remark': _remarkCtrl.text.trim(),
+      'amount': rate,
+      'totalAmount': _netTotal * rate,
       'date': _date.toIso8601String(),
       'rows': _rows.map((r) => r.toJson()).toList(),
     };
@@ -1105,7 +1163,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         filled: true,
         fillColor: fill ?? Colors.white,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(6),
             borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
@@ -1176,8 +1234,6 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
             _buildHeaderCard(),
             const SizedBox(height: 12),
             _buildRowsSection(),
-            const SizedBox(height: 12),
-            _buildSummaryCard(),
             const SizedBox(height: 100),
           ],
         ),
@@ -1224,21 +1280,24 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         ),
       );
 
-  Widget _summaryMini() => Row(children: [
-        _miniStat('Gross', _grossTotal, _msBlue),
-        if (_openTotal > 0) ...[
-          const SizedBox(width: 8),
-          const Text('−',
-              style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
-          const SizedBox(width: 8),
-          _miniStat('Open', _openTotal, _msRed),
-          const SizedBox(width: 8),
-          const Text('=',
-              style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
-          const SizedBox(width: 8),
-        ],
-        _miniStat('Net', _netTotal, _msGreen),
-      ]);
+  Widget _summaryMini() {
+    final amount = double.tryParse(_amountCtrl.text) ?? 0;
+    return Row(children: [
+      _miniStat('Net', _netTotal, _msGreen),
+      if (amount > 0) ...[
+        const SizedBox(width: 8),
+        const Text('×',
+            style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+        const SizedBox(width: 8),
+        _miniStat('Rate', amount, _msBlue),
+        const SizedBox(width: 8),
+        const Text('=',
+            style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+        const SizedBox(width: 8),
+        _miniStat('Total', _totalValue, const Color(0xFFEA580C)),
+      ],
+    ]);
+  }
 
   Widget _miniStat(String label, double val, Color color) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1254,89 +1313,129 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
 
   Widget _buildHeaderCard() => _card(
         padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle('Site Details', Icons.location_city_outlined),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: _branches.isEmpty
-                  ? const SizedBox(
-                      height: 48, child: Center(child: AppLoader()))
-                  : DropdownButtonFormField<String>(
-                      key: ValueKey('branch_$_branchId'),
-                      initialValue: _branchId,
-                      decoration:
-                          _fieldDec('Branch', icon: Icons.store_outlined),
-                      style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF1A1A2E)),
-                      borderRadius: BorderRadius.circular(8),
-                      isExpanded: true,
-                      items: _branches
-                          .map<DropdownMenuItem<String>>((b) =>
-                              DropdownMenuItem(
-                                  value: b['_id'] as String,
-                                  child: Text(b['name'] as String)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _branchId = v),
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: DatePickerField(
-                label: 'Date',
-                value: _date,
-                onChanged: (d) => setState(() => _date = d),
+        child: LayoutBuilder(builder: (context, cs) {
+          final isMobile = cs.maxWidth < 480;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _sectionTitle('Site Details', Icons.location_city_outlined),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: _branches.isEmpty
+                    ? const SizedBox(
+                        height: 48, child: Center(child: AppLoader()))
+                    : DropdownButtonFormField<String>(
+                        key: ValueKey('branch_$_branchId'),
+                        initialValue: _branchId,
+                        decoration:
+                            _fieldDec('Branch', icon: Icons.store_outlined),
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF1A1A2E)),
+                        borderRadius: BorderRadius.circular(8),
+                        isExpanded: true,
+                        items: _branches
+                            .map<DropdownMenuItem<String>>((b) =>
+                                DropdownMenuItem(
+                                    value: b['_id'] as String,
+                                    child: Text(b['name'] as String)))
+                            .toList(),
+                        onChanged: _onBranchChanged,
+                      ),
               ),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: TextFormField(
-                controller: _locationCtrl,
-                decoration: _fieldDec('Location', icon: Icons.place_outlined),
-                style: const TextStyle(fontSize: 13),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DatePickerField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: _siteCtrl,
-                decoration:
-                    _fieldDec('Site Name', icon: Icons.business_outlined),
-                style: const TextStyle(fontSize: 13),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _locationCtrl,
+                  decoration: _fieldDec('Location', icon: Icons.place_outlined),
+                  style: const TextStyle(fontSize: 13),
+                ),
               ),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: TextFormField(
-                controller: _floorCtrl,
-                decoration: _fieldDec('Floor', icon: Icons.layers_outlined),
-                style: const TextStyle(fontSize: 13),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: _siteCtrl,
+                  decoration:
+                      _fieldDec('Site Name', icon: Icons.business_outlined),
+                  style: const TextStyle(fontSize: 13),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: _villaCtrl,
-                decoration:
-                    _fieldDec('Villa / Unit No.', icon: Icons.home_outlined),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
+            ]),
+            const SizedBox(height: 10),
+            if (isMobile) ...[
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _floorCtrl,
+                    decoration: _fieldDec('Floor', icon: Icons.layers_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _villaCtrl,
+                    decoration: _fieldDec('Villa / Unit No.',
+                        icon: Icons.home_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              TextFormField(
                 controller: _remarkCtrl,
-                decoration:
-                    _fieldDec('Remark / Work type', icon: Icons.notes_rounded),
+                decoration: _fieldDec('Remark / Work type',
+                    icon: Icons.notes_rounded),
                 style: const TextStyle(fontSize: 13),
               ),
+            ] else
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _floorCtrl,
+                    decoration: _fieldDec('Floor', icon: Icons.layers_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _villaCtrl,
+                    decoration: _fieldDec('Villa / Unit No.',
+                        icon: Icons.home_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _remarkCtrl,
+                    decoration: _fieldDec('Remark / Work type',
+                        icon: Icons.notes_rounded),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ]),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+              decoration: _fieldDec('Rate per unit (₹)',
+                  icon: Icons.currency_rupee_outlined),
+              style: const TextStyle(fontSize: 13),
+              onChanged: (_) => setState(() {}),
             ),
-          ]),
-        ]),
+          ]);
+        }),
       );
 
   // ── Measurement rows section ──────────────────────────────────────────────
@@ -1355,19 +1454,32 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
               _addRowBtn('+ Open(−)', 'open', _msRed),
             ]),
           ),
-          _buildColumnHeaders(),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          if (_rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                  child: Text('No rows yet. Tap + Inside or + Open(−) to add.',
-                      style:
-                          TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
-            )
-          else
-            ...List.generate(_rows.length, _buildRowItem),
-          const SizedBox(height: 8),
+          LayoutBuilder(builder: (ctx, cs) {
+            const minW = 680.0;
+            final tableBody = Column(children: [
+              _buildColumnHeaders(),
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
+              if (_rows.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                      child: Text(
+                          'No rows yet. Tap + Inside or + Open(−) to add.',
+                          style: TextStyle(
+                              fontSize: 13, color: Color(0xFF9CA3AF)))),
+                )
+              else
+                ...List.generate(_rows.length, _buildRowItem),
+              const SizedBox(height: 8),
+            ]);
+            if (cs.maxWidth < minW) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(width: minW, child: tableBody),
+              );
+            }
+            return tableBody;
+          }),
         ]),
       );
 
@@ -1458,8 +1570,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
               flex: 4,
               child: TextFormField(
                 controller: row.lInCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                 decoration: _rowDec('in'),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) { row.recalcTotal(); setState(() {}); },
@@ -1484,8 +1596,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
               flex: 4,
               child: TextFormField(
                 controller: row.dInCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
                 decoration: _rowDec('in'),
                 style: const TextStyle(fontSize: 12),
                 onChanged: (_) { row.recalcTotal(); setState(() {}); },
@@ -1598,105 +1710,6 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     );
   }
 
-  // ── Summary card ──────────────────────────────────────────────────────────
-
-  Widget _buildSummaryCard() {
-    final gross = _grossTotal;
-    final open = _openTotal;
-    final net = _netTotal;
-
-    return _card(
-      padding: const EdgeInsets.all(14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionTitle('Summary', Icons.calculate_outlined),
-        const SizedBox(height: 12),
-        // Per-row breakdown
-        ..._rowBreakdown(),
-        const Divider(height: 20, color: Color(0xFFE5E7EB)),
-        if (open > 0) ...[
-          _summaryLine('Gross Total (inside)', gross, _msBlue, bold: true),
-          _summaryLine('Open Deductions (−)', open, _msRed, bold: true),
-          const Divider(height: 16, color: Color(0xFFE5E7EB)),
-        ],
-        // Net qty highlight
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: _msGreen.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _msGreen.withValues(alpha: 0.3)),
-          ),
-          child: Row(children: [
-            const Icon(Icons.check_circle_outline_rounded,
-                size: 16, color: _msGreen),
-            const SizedBox(width: 8),
-            const Text("Net Qty (Today's Qty)",
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827))),
-            const Spacer(),
-            Text(_fmtQ(net),
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _msGreen)),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  List<Widget> _rowBreakdown() {
-    final widgets = <Widget>[];
-    for (var i = 0; i < _rows.length; i++) {
-      final r = _rows[i];
-      final t = double.tryParse(r.totalCtrl.text) ?? 0;
-      if (t <= 0) continue;
-      final isOpen = r.type == 'open';
-      final beam = r.beamCtrl.text.trim();
-      final room = r.roomCtrl.text.trim();
-      final desc = [
-        if (beam.isNotEmpty) beam,
-        if (room.isNotEmpty) room,
-      ].join(' — ');
-      widgets.add(_summaryLine(
-        desc.isNotEmpty ? desc : 'Row ${i + 1}',
-        t,
-        isOpen ? _msRed : _msBlue,
-        prefix: isOpen ? '−' : '+',
-      ));
-    }
-    return widgets;
-  }
-
-  Widget _summaryLine(String label, double val, Color color,
-          {bool bold = false, String prefix = ''}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.6), shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: const Color(0xFF374151),
-                    fontWeight: bold ? FontWeight.w600 : FontWeight.w400)),
-          ),
-          Text('$prefix${_fmtQ(val)}',
-              style: TextStyle(
-                  fontSize: 12,
-                  color: color,
-                  fontWeight: bold ? FontWeight.w700 : FontWeight.w500)),
-        ]),
-      );
-
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   Widget _card({required Widget child, EdgeInsetsGeometry? padding}) =>
@@ -1747,6 +1760,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
   final _floorCtrl    = TextEditingController();
   final _villaCtrl    = TextEditingController();
   final _remarkCtrl   = TextEditingController();
+  final _amountCtrl   = TextEditingController();
   DateTime _date = DateTime.now();
   final List<_MeasRow> _rows = [];
   bool _saving = false;
@@ -1763,6 +1777,8 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
       _floorCtrl.text    = (e['floor']    ?? '') as String;
       _villaCtrl.text    = (e['villaNo']  ?? '') as String;
       _remarkCtrl.text   = (e['remark']   ?? '') as String;
+      final amt = (e['amount'] as num?)?.toDouble() ?? 0;
+      if (amt > 0) _amountCtrl.text = _MeasRow._s(amt);
       if (e['date'] != null) _date = DateTime.parse(e['date'] as String);
       for (final r in (e['rows'] as List? ?? [])) {
         _rows.add(_MeasRow.fromMap(r as Map));
@@ -1778,6 +1794,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
     _floorCtrl.dispose();
     _villaCtrl.dispose();
     _remarkCtrl.dispose();
+    _amountCtrl.dispose();
     for (final r in _rows) { r.dispose(); }
     super.dispose();
   }
@@ -1785,6 +1802,19 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
   Future<void> _loadBranches() async {
     final res = await ApiService.get('/branches');
     if (mounted) setState(() => _branches = res['data'] ?? []);
+  }
+
+  void _onBranchChanged(String? id) {
+    setState(() => _branchId = id);
+    if (id == null) return;
+    final branch = _branches.firstWhere(
+        (b) => b['_id'] == id, orElse: () => {});
+    if (branch.isEmpty) return;
+    final locationObj = branch['location'];
+    final loc = locationObj is Map
+        ? ((locationObj['name'] ?? locationObj['address'] ?? '') as String).trim()
+        : '';
+    if (loc.isNotEmpty) setState(() => _locationCtrl.text = loc);
   }
 
   void _addRow([String type = 'inside']) =>
@@ -1804,10 +1834,12 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
       .fold(0.0, (s, r) => s + (double.tryParse(r.totalCtrl.text) ?? 0));
 
   double get _netTotal => _grossTotal - _openTotal;
+  double get _totalValue =>
+      _netTotal * (double.tryParse(_amountCtrl.text) ?? 0);
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final rate = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final body = {
       if (_branchId != null) 'branch': _branchId,
       'location': _locationCtrl.text.trim(),
@@ -1815,6 +1847,8 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
       'floor':    _floorCtrl.text.trim(),
       'villaNo':  _villaCtrl.text.trim(),
       'remark':   _remarkCtrl.text.trim(),
+      'amount':   rate,
+      'totalAmount': _netTotal * rate,
       'date': _date.toIso8601String(),
       'rows': _rows.map((r) => r.toJson()).toList(),
     };
@@ -1864,7 +1898,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
         filled: true,
         fillColor: fill ?? Colors.white,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(5),
             borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
@@ -1947,8 +1981,6 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
               _buildSiteSection(),
               const SizedBox(height: 12),
               _buildTableSection(),
-              const SizedBox(height: 12),
-              _buildSummarySection(),
             ],
           ),
         ),
@@ -1991,19 +2023,22 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
     ]);
   }
 
-  Widget _miniSummary() => Row(children: [
-        _mStat('Gross', _grossTotal, _msBlue),
-        if (_openTotal > 0) ...[
-          const SizedBox(width: 6),
-          const Text('−', style: TextStyle(color: Color(0xFF9CA3AF))),
-          const SizedBox(width: 6),
-          _mStat('Open', _openTotal, _msRed),
-          const SizedBox(width: 6),
-          const Text('=', style: TextStyle(color: Color(0xFF9CA3AF))),
-          const SizedBox(width: 6),
-        ],
-        _mStat('Net', _netTotal, _msGreen),
-      ]);
+  Widget _miniSummary() {
+    final amount = double.tryParse(_amountCtrl.text) ?? 0;
+    return Row(children: [
+      _mStat('Net', _netTotal, _msGreen),
+      if (amount > 0) ...[
+        const SizedBox(width: 6),
+        const Text('×', style: TextStyle(color: Color(0xFF9CA3AF))),
+        const SizedBox(width: 6),
+        _mStat('Rate', amount, _msBlue),
+        const SizedBox(width: 6),
+        const Text('=', style: TextStyle(color: Color(0xFF9CA3AF))),
+        const SizedBox(width: 6),
+        _mStat('Total', _totalValue, const Color(0xFFEA580C)),
+      ],
+    ]);
+  }
 
   Widget _mStat(String label, double val, Color c) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2018,85 +2053,123 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
 
   Widget _buildSiteSection() => _card(
         padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _secTitle('Site Details', Icons.location_city_outlined),
-          const SizedBox(height: 10),
-          // Branch + Date
-          Row(children: [
-            Expanded(
-              child: _branches.isEmpty
-                  ? const SizedBox(height: 46,
-                      child: Center(child: AppLoader()))
-                  : DropdownButtonFormField<String>(
-                      key: ValueKey('br_$_branchId'),
-                      initialValue: _branchId,
-                      decoration: _fd('Branch', icon: Icons.store_outlined),
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
-                      borderRadius: BorderRadius.circular(8),
-                      isExpanded: true,
-                      items: _branches.map<DropdownMenuItem<String>>((b) =>
-                          DropdownMenuItem(
-                              value: b['_id'] as String,
-                              child: Text(b['name'] as String))).toList(),
-                      onChanged: (v) => setState(() => _branchId = v),
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: DatePickerField(
-                label: 'Date',
-                value: _date,
-                onChanged: (d) => setState(() => _date = d),
+        child: LayoutBuilder(builder: (context, cs) {
+          final isMobile = cs.maxWidth < 480;
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _secTitle('Site Details', Icons.location_city_outlined),
+            const SizedBox(height: 10),
+            // Branch + Date
+            Row(children: [
+              Expanded(
+                child: _branches.isEmpty
+                    ? const SizedBox(height: 46,
+                        child: Center(child: AppLoader()))
+                    : DropdownButtonFormField<String>(
+                        key: ValueKey('br_$_branchId'),
+                        initialValue: _branchId,
+                        decoration: _fd('Branch', icon: Icons.store_outlined),
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E)),
+                        borderRadius: BorderRadius.circular(8),
+                        isExpanded: true,
+                        items: _branches.map<DropdownMenuItem<String>>((b) =>
+                            DropdownMenuItem(
+                                value: b['_id'] as String,
+                                child: Text(b['name'] as String))).toList(),
+                        onChanged: _onBranchChanged,
+                      ),
               ),
-            ),
-          ]),
-          const SizedBox(height: 9),
-          // Location + Site
-          Row(children: [
-            Expanded(
-              child: TextFormField(
-                controller: _locationCtrl,
-                decoration: _fd('Location', icon: Icons.place_outlined),
-                style: const TextStyle(fontSize: 13),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DatePickerField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: _siteCtrl,
-                decoration: _fd('Site Name', icon: Icons.business_outlined),
-                style: const TextStyle(fontSize: 13),
+            ]),
+            const SizedBox(height: 9),
+            // Location + Site
+            Row(children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _locationCtrl,
+                  decoration: _fd('Location', icon: Icons.place_outlined),
+                  style: const TextStyle(fontSize: 13),
+                ),
               ),
-            ),
-          ]),
-          const SizedBox(height: 9),
-          // Floor + Villa + Remark
-          Row(children: [
-            Expanded(
-              child: TextFormField(
-                controller: _floorCtrl,
-                decoration: _fd('Floor', icon: Icons.layers_outlined),
-                style: const TextStyle(fontSize: 13),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: _siteCtrl,
+                  decoration: _fd('Site Name', icon: Icons.business_outlined),
+                  style: const TextStyle(fontSize: 13),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: _villaCtrl,
-                decoration: _fd('Villa / Unit No.', icon: Icons.home_outlined),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
+            ]),
+            const SizedBox(height: 9),
+            // Floor + Villa + Remark — stack on narrow screens
+            if (isMobile) ...[
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _floorCtrl,
+                    decoration: _fd('Floor', icon: Icons.layers_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _villaCtrl,
+                    decoration: _fd('Villa / Unit No.', icon: Icons.home_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 9),
+              TextFormField(
                 controller: _remarkCtrl,
                 decoration: _fd('Remark / Work type', icon: Icons.notes_rounded),
                 style: const TextStyle(fontSize: 13),
               ),
+            ] else
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _floorCtrl,
+                    decoration: _fd('Floor', icon: Icons.layers_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _villaCtrl,
+                    decoration: _fd('Villa / Unit No.', icon: Icons.home_outlined),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _remarkCtrl,
+                    decoration: _fd('Remark / Work type', icon: Icons.notes_rounded),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ]),
+            const SizedBox(height: 9),
+            TextFormField(
+              controller: _amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))],
+              decoration: _fd('Rate per unit (₹)',
+                  icon: Icons.currency_rupee_outlined),
+              style: const TextStyle(fontSize: 13),
+              onChanged: (_) => setState(() {}),
             ),
-          ]),
-        ]),
+          ]);
+        }),
       );
 
   // ── Measurement table section ─────────────────────────────────────────────
@@ -2116,43 +2189,56 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
               _addBtn('+ Open(−)', 'open', _msRed),
             ]),
           ),
-          // Column headers — diary right-page style
-          Container(
-            color: const Color(0xFFF0F9F4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            child: Row(children: [
-              _th('#', 28),
-              _thF('Length (ft)', 6),
-              const SizedBox(width: 3),
-              _thF('(in)', 4),
-              _gap(),
-              _thF('Depth (ft)', 6),
-              const SizedBox(width: 3),
-              _thF('(in)', 4),
-              _gap(),
-              _thF('Nos', 5),
-              _gap(),
-              _thF('Total', 9),
-              _gap(),
-              _thF('Beam No.', 10),
-              _gap(),
-              _thF('Type', 7),
-              const SizedBox(width: 26),
-            ]),
-          ),
-          const Divider(height: 1, color: Color(0xFFDDE3E0)),
-          // Rows
-          if (_rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(28),
-              child: Center(
-                  child: Text(
-                      'No rows yet — tap + Inside or + Open(−) to begin.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)))),
-            )
-          else
-            ...List.generate(_rows.length, _buildRow),
-          const SizedBox(height: 6),
+          LayoutBuilder(builder: (ctx, cs) {
+            const minW = 680.0;
+            final tableBody = Column(children: [
+              // Column headers — diary right-page style
+              Container(
+                color: const Color(0xFFF0F9F4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: Row(children: [
+                  _th('#', 28),
+                  _thF('Length (ft)', 6),
+                  const SizedBox(width: 3),
+                  _thF('(in)', 4),
+                  _gap(),
+                  _thF('Depth (ft)', 6),
+                  const SizedBox(width: 3),
+                  _thF('(in)', 4),
+                  _gap(),
+                  _thF('Nos', 5),
+                  _gap(),
+                  _thF('Total', 9),
+                  _gap(),
+                  _thF('Beam No.', 10),
+                  _gap(),
+                  _thF('Type', 7),
+                  const SizedBox(width: 26),
+                ]),
+              ),
+              const Divider(height: 1, color: Color(0xFFDDE3E0)),
+              // Rows
+              if (_rows.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(28),
+                  child: Center(
+                      child: Text(
+                          'No rows yet — tap + Inside or + Open(−) to begin.',
+                          style: TextStyle(
+                              fontSize: 13, color: Color(0xFF9CA3AF)))),
+                )
+              else
+                ...List.generate(_rows.length, _buildRow),
+              const SizedBox(height: 6),
+            ]);
+            if (cs.maxWidth < minW) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(width: minW, child: tableBody),
+              );
+            }
+            return tableBody;
+          }),
         ]),
       );
 
@@ -2211,7 +2297,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
             })),
             const SizedBox(width: 3),
             // Length in
-            Expanded(flex: 4, child: _numField(row.lInCtrl, 'in', integer: true, onCh: () {
+            Expanded(flex: 4, child: _numField(row.lInCtrl, 'in', onCh: () {
               row.recalcTotal(); setState(() {});
             })),
             _gap(),
@@ -2221,7 +2307,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
             })),
             const SizedBox(width: 3),
             // Depth in
-            Expanded(flex: 4, child: _numField(row.dInCtrl, 'in', integer: true, onCh: () {
+            Expanded(flex: 4, child: _numField(row.dInCtrl, 'in', onCh: () {
               row.recalcTotal(); setState(() {});
             })),
             _gap(),
@@ -2326,95 +2412,6 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
         decoration: _rd(hint),
         style: const TextStyle(fontSize: 12),
         onChanged: (_) => onCh?.call(),
-      );
-
-  // ── Summary section ───────────────────────────────────────────────────────
-
-  Widget _buildSummarySection() {
-    final gross = _grossTotal;
-    final open  = _openTotal;
-    final net   = _netTotal;
-
-    final breakdown = <Widget>[];
-    for (var i = 0; i < _rows.length; i++) {
-      final r = _rows[i];
-      final t = double.tryParse(r.totalCtrl.text) ?? 0;
-      if (t <= 0) continue;
-      final isOpen = r.type == 'open';
-      final beam = r.beamCtrl.text.trim();
-      final room = r.roomCtrl.text.trim();
-      final desc = [if (beam.isNotEmpty) beam, if (room.isNotEmpty) room].join(' — ');
-      breakdown.add(_sLine(
-        desc.isNotEmpty ? desc : 'Row ${i + 1}',
-        t,
-        isOpen ? _msRed : _msBlue,
-        prefix: isOpen ? '−' : '+',
-      ));
-    }
-
-    return _card(
-      padding: const EdgeInsets.all(14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _secTitle('Summary', Icons.calculate_outlined),
-        const SizedBox(height: 10),
-        ...breakdown,
-        const Divider(height: 18, color: Color(0xFFE5E7EB)),
-        if (open > 0) ...[
-          _sLine('Gross Total', gross, _msBlue, bold: true),
-          _sLine('Open Deductions (−)', open, _msRed, bold: true),
-          const Divider(height: 14, color: Color(0xFFE5E7EB)),
-        ],
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: _msGreen.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _msGreen.withValues(alpha: 0.3)),
-          ),
-          child: Row(children: [
-            const Icon(Icons.check_circle_outline_rounded,
-                size: 15, color: _msGreen),
-            const SizedBox(width: 8),
-            const Text("Net Qty (Today's Qty)",
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827))),
-            const Spacer(),
-            Text(_fmtQ(net),
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _msGreen)),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _sLine(String label, double val, Color color,
-      {bool bold = false, String prefix = ''}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [
-          Container(
-              width: 6, height: 6,
-              decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.6),
-                  shape: BoxShape.circle)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: const Color(0xFF374151),
-                      fontWeight: bold ? FontWeight.w600 : FontWeight.w400))),
-          Text('$prefix${_fmtQ(val)}',
-              style: TextStyle(
-                  fontSize: 12,
-                  color: color,
-                  fontWeight: bold ? FontWeight.w700 : FontWeight.w500)),
-        ]),
       );
 
   // ── Shared helpers ────────────────────────────────────────────────────────

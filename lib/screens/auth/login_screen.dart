@@ -17,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _userIdCtrl = TextEditingController(text: '');
-  final _passCtrl = TextEditingController(text: 'password123');
+  final _passCtrl = TextEditingController(text: '');
   bool _obscure = true;
   bool _loading = false;
   late final AnimationController _ctrl;
@@ -142,8 +142,8 @@ class _LoginScreenState extends State<LoginScreen>
               const SizedBox(height: 28),
               FadeTransition(
                 opacity: _fade,
-                child: SlideTransition(
-                    position: _slide, child: _buildFormCard()),
+                child:
+                    SlideTransition(position: _slide, child: _buildFormCard()),
               ),
             ]),
           ),
@@ -181,8 +181,8 @@ class _LoginScreenState extends State<LoginScreen>
                   color: _kAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child:
-                    const Icon(Icons.grid_view_rounded, color: _kAccent, size: 22),
+                child: const Icon(Icons.grid_view_rounded,
+                    color: _kAccent, size: 22),
               ),
               const SizedBox(width: 12),
               const Column(
@@ -277,9 +277,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _fieldLabel(String text) => Text(text,
       style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF1A1A2E)));
+          fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E)));
 
   InputDecoration _inputDeco({
     required String hint,
@@ -293,11 +291,9 @@ class _LoginScreenState extends State<LoginScreen>
       suffixIcon: suffix,
       filled: true,
       fillColor: _kBg,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none),
+          borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.grey.shade200, width: 1)),
@@ -386,7 +382,8 @@ class _BrandPanel extends StatelessWidget {
                 const SizedBox(height: 14),
                 const Text(
                   'From godown to dispatch — every unit tracked,\nevery movement recorded.',
-                  style: TextStyle(color: Colors.white60, fontSize: 14, height: 1.6),
+                  style: TextStyle(
+                      color: Colors.white60, fontSize: 14, height: 1.6),
                 ),
 
                 const SizedBox(height: 40),
@@ -487,8 +484,7 @@ class _FeatureTile extends StatelessWidget {
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 3),
             Text(subtitle,
-                style:
-                    const TextStyle(color: Colors.white54, fontSize: 12)),
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
           ],
         ),
       ),
