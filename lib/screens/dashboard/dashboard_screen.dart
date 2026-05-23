@@ -9,7 +9,7 @@ import '../transactions/attendance_screen.dart';
 import '../transactions/advance_screen.dart';
 import '../transactions/expense_screen.dart';
 import '../transactions/payment_screen.dart';
-import '../transactions/transport_screen.dart';
+import '../transactions/transport_screen.dart' hide MeasurementScreen, MeasurementFormScreen;
 import '../transactions/measurement_screen.dart';
 import '../masters/location_screen.dart';
 import '../masters/branch_screen.dart';
@@ -222,7 +222,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       case 1:  return auth.canAccess('attendance')  ? const AttendanceScreen()       : _accessDenied();
       case 14: return auth.canAccess('advances')    ? const AdvanceScreen()          : _accessDenied();
       case 2:  return auth.canAccess('stock')       ? const StockScreen()            : _accessDenied();
-      case 3:  return auth.canAccess('transport')   ? const TransportScreen()        : _accessDenied();
+      case 3:  return auth.canAccess('transport')     ? const TransportScreen()        : _accessDenied();
+      case 17: return auth.canAccess('measurements') ? const MeasurementScreen()     : _accessDenied();
       case 4:  return auth.canAccess('expenses')    ? const ExpenseScreen()          : _accessDenied();
       case 5:  return auth.canAccess('payments')    ? const PaymentScreen()          : _accessDenied();
       case 6:  return auth.canAccess('location')    ? const LocationScreen()         : _accessDenied();
@@ -463,15 +464,16 @@ class _SidebarContent extends StatelessWidget {
               _sectionLabel('MAIN'),
               _navItem(0, Icons.dashboard_outlined, 'Dashboard', null),
               const SizedBox(height: 8),
-              if (_hasAny(auth, ['attendance','advances','outstanding','stock','transport','expenses','payments'])) ...[
+              if (_hasAny(auth, ['attendance','advances','outstanding','stock','transport','measurements','expenses','payments'])) ...[
                 _sectionLabel('OPERATIONS'),
-                if (auth.canAccess('attendance'))   _navItem(1,  Icons.how_to_reg_outlined,              'Attendance',        null),
-                if (auth.canAccess('advances'))     _navItem(14, Icons.account_balance_wallet_outlined,   'Advances',          null),
-                if (auth.canAccess('outstanding'))  _navItem(16, Icons.account_balance_outlined,          'Outstanding',       null),
-                if (auth.canAccess('stock'))       _navItem(2,  Icons.inventory_2_outlined,              'Material Stock',    null),
-                if (auth.canAccess('transport'))   _navItem(3,  Icons.local_shipping_outlined,           'Transport Detail',  null),
-                if (auth.canAccess('expenses'))    _navItem(4,  Icons.receipt_long_outlined,             'Expenses',          null),
-                if (auth.canAccess('payments'))    _navItem(5,  Icons.payment_outlined,                  'Payments',          null),
+                if (auth.canAccess('attendance'))    _navItem(1,  Icons.how_to_reg_outlined,             'Attendance',        null),
+                if (auth.canAccess('advances'))      _navItem(14, Icons.account_balance_wallet_outlined,  'Advances',          null),
+                if (auth.canAccess('outstanding'))   _navItem(16, Icons.account_balance_outlined,         'Outstanding',       null),
+                if (auth.canAccess('stock'))         _navItem(2,  Icons.inventory_2_outlined,             'Material Stock',    null),
+                if (auth.canAccess('transport'))     _navItem(3,  Icons.local_shipping_outlined,          'Transport Detail',  null),
+                if (auth.canAccess('measurements'))  _navItem(17, Icons.straighten_rounded,               'Measurement',       null),
+                if (auth.canAccess('expenses'))      _navItem(4,  Icons.receipt_long_outlined,            'Expenses',          null),
+                if (auth.canAccess('payments'))      _navItem(5,  Icons.payment_outlined,                 'Payments',          null),
                 const SizedBox(height: 8),
               ],
               if (_hasAny(auth, ['branches','location','category','expense_cat','user_cat','materials','employees','users'])) ...[
