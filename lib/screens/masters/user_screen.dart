@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -699,6 +701,7 @@ class _UserScreenState extends State<UserScreen> {
   }
 
   Widget _actionMenu(Map u) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(

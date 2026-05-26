@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -417,7 +419,7 @@ class _BranchScreenState extends State<BranchScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _openForm(b),
+        onTap: null,
         hoverColor: const Color(0xFFF9FAFB),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -469,7 +471,7 @@ class _BranchScreenState extends State<BranchScreen> {
   Widget _mobileCard(Map b, int index) {
     final isActive = b['isActive'] ?? b['active'] ?? true;
     return InkWell(
-      onTap: () => _openForm(b),
+      onTap: null,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -579,6 +581,7 @@ class _BranchScreenState extends State<BranchScreen> {
   }
 
   Widget _actionMenu(Map b) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(

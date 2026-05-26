@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -315,7 +317,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _openForm(c),
+        onTap: null,
         hoverColor: const Color(0xFFF9FAFB),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -358,7 +360,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget _mobileCard(Map c, int index) {
     final isActive = c['isActive'] ?? true;
     return InkWell(
-      onTap: () => _openForm(c),
+      onTap: null,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -455,6 +457,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   Widget _actionMenu(Map c) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(
@@ -1126,7 +1129,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _openForm(item),
+        onTap: null,
         hoverColor: const Color(0xFFF9FAFB),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -1234,7 +1237,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
 
   Widget _mobileCard(Map item, int index) {
     return InkWell(
-      onTap: () => _openForm(item),
+      onTap: null,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -1267,6 +1270,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
   }
 
   Widget _actionMenu(Map item) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(

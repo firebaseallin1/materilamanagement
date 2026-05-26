@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -556,7 +558,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _openForm(item),
+        onTap: null,
         hoverColor: const Color(0xFFF9FAFB),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -598,7 +600,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                 flex: 2,
                 child: Text(
                     item['date'] != null
-                        ? dateFmt.format(DateTime.parse(item['date']))
+                        ? dateFmt.format(DateTime.parse(item['date']).toLocal())
                         : '—',
                     style: const TextStyle(
                         fontSize: 12, color: Color(0xFF6B7280)))),
@@ -631,7 +633,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
     final dateFmt = DateFormat('dd MMM yyyy');
     final amount = (item['amount'] ?? 0).toDouble();
     return InkWell(
-      onTap: () => _openForm(item),
+      onTap: null,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -682,7 +684,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
             const SizedBox(height: 3),
             Text(
                 item['date'] != null
-                    ? dateFmt.format(DateTime.parse(item['date']))
+                    ? dateFmt.format(DateTime.parse(item['date']).toLocal())
                     : '—',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
           ]),
@@ -739,7 +741,9 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
     );
   }
 
-  Widget _actionMenu(Map item) => SizedBox(
+  Widget _actionMenu(Map item) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
+    return SizedBox(
         width: 40,
         child: PopupMenuButton<String>(
           icon: const Icon(Icons.more_horiz_rounded,
@@ -770,6 +774,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           },
         ),
       );
+  }
 
   // ── Empty state ───────────────────────────────────────────────────────────────
 
@@ -870,7 +875,7 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
       _branchId = e['branch']?['_id'];
       _amountCtrl.text = e['amount'] != null ? e['amount'].toString() : '';
       _remarksCtrl.text = e['remarks'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']);
+      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
     }
   }
 

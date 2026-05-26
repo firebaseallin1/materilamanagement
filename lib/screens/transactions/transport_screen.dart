@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -684,7 +686,7 @@ class _TransportScreenState extends State<TransportScreen> {
             final dateStr = item['date'] as String?;
 
             return InkWell(
-              onTap: isStockMove ? null : () => _openForm(item),
+              onTap: null,
               borderRadius: BorderRadius.circular(10),
               hoverColor: accent.withValues(alpha: 0.04),
               child: Container(
@@ -1191,6 +1193,7 @@ class _TransportScreenState extends State<TransportScreen> {
   }
 
   Widget _actionMenu(Map item) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 28,
       height: 28,
@@ -1288,7 +1291,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
       _distCtrl.text = '${e['distance'] ?? ''}';
       _costCtrl.text = '${e['cost'] ?? ''}';
       _remarksCtrl.text = e['remarks'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']);
+      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
     }
   }
 
@@ -1686,7 +1689,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                       final item = _items[i];
                       final date = item['date'] != null
                           ? DateFormat('dd MMM yyyy')
-                              .format(DateTime.parse(item['date']))
+                              .format(DateTime.parse(item['date']).toLocal())
                           : '—';
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -1784,7 +1787,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
       _heiCtrl.text = '${e['height'] ?? ''}';
       _qtyCtrl.text = '${e['quantity'] ?? ''}';
       _descCtrl.text = e['description'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']);
+      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
     }
   }
 

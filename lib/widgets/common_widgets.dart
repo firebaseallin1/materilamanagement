@@ -204,12 +204,199 @@ Future<bool> confirmDelete(BuildContext context) async {
       false;
 }
 
-// ── Show Snack ─────────────────────────────────────────────────────────────────
+// ── Show Snack (success toasts only) ──────────────────────────────────────────
 void showSnack(BuildContext context, String msg, {bool error = false}) {
+  if (error) {
+    showAppDialog(context, msg, type: AppDialogType.error);
+    return;
+  }
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg),
-    backgroundColor: error ? Colors.red : Colors.green,
+    content: Row(children: [
+      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+      const SizedBox(width: 10),
+      Expanded(child: Text(msg, style: const TextStyle(fontSize: 13))),
+    ]),
+    backgroundColor: const Color(0xFF16A34A),
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    margin: const EdgeInsets.all(14),
+    duration: const Duration(seconds: 2),
   ));
+}
+
+// ── App Dialog ────────────────────────────────────────────────────────────────
+enum AppDialogType { error, success, warning, info }
+
+Future<void> showAppDialog(
+  BuildContext context,
+  String message, {
+  String? title,
+  AppDialogType type = AppDialogType.error,
+}) {
+  final cfg = _dialogConfig(type);
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => _AppDialog(
+      message: message,
+      title: title ?? cfg.title,
+      icon: cfg.icon,
+      color: cfg.color,
+      btnLabel: cfg.btnLabel,
+    ),
+  );
+}
+
+({String title, IconData icon, Color color, String btnLabel}) _dialogConfig(
+    AppDialogType type) {
+  return switch (type) {
+    AppDialogType.error   => (
+        title: 'Something went wrong',
+        icon: Icons.error_rounded,
+        color: const Color(0xFFDC2626),
+        btnLabel: 'OK',
+      ),
+    AppDialogType.success => (
+        title: 'Success',
+        icon: Icons.check_circle_rounded,
+        color: const Color(0xFF16A34A),
+        btnLabel: 'Done',
+      ),
+    AppDialogType.warning => (
+        title: 'Warning',
+        icon: Icons.warning_amber_rounded,
+        color: const Color(0xFFD97706),
+        btnLabel: 'OK',
+      ),
+    AppDialogType.info    => (
+        title: 'Info',
+        icon: Icons.info_rounded,
+        color: const Color(0xFF2563EB),
+        btnLabel: 'Got it',
+      ),
+  };
+}
+
+class _AppDialog extends StatelessWidget {
+  final String message;
+  final String title;
+  final IconData icon;
+  final Color color;
+  final String btnLabel;
+
+  const _AppDialog({
+    required this.message,
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.btnLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        margin: const EdgeInsets.only(top: 40),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon badge sits above the card top edge
+            Transform.translate(
+              offset: const Offset(0, -40),
+              child: Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [color, color.withValues(alpha: 0.70)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.35),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 36),
+              ),
+            ),
+            // Compensate for the translate offset
+            const SizedBox(height: 0),
+            Transform.translate(
+              offset: const Offset(0, -28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFF6B7280),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        btnLabel,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      ), // ConstrainedBox
+    );
+  }
 }
 
 // ── App Loader ─────────────────────────────────────────────────────────────────

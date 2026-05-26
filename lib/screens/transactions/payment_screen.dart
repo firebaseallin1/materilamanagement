@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -64,9 +66,17 @@ class _PaymentScreenState extends State<PaymentScreen>
     super.dispose();
   }
 
+  static String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Future<void> _load() async {
     setState(() => _loading = true);
-    final res = await ApiService.get('/payments');
+    final params = <String, String>{'limit': '1000'};
+    if (_filterFrom != null) params['from'] = _fmtDate(_filterFrom!);
+    if (_filterTo != null) params['to'] = _fmtDate(_filterTo!);
+    if (_filterBranch != null) params['branch'] = _filterBranch!;
+    if (_filterCategory != null) params['category'] = _filterCategory!;
+    final res = await ApiService.get('/payments', params: params);
     if (mounted)
       setState(() {
         _items = res['data'] ?? [];
@@ -103,16 +113,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             (e['category'] ?? '').toLowerCase().contains(q);
         if (!match) return false;
       }
-      if (_filterBranch != null && e['branch']?['_id'] != _filterBranch) return false;
       if (_filterParty != null && e['partyName'] != _filterParty) return false;
-      if (_filterCategory != null && (e['category'] ?? 'other') != _filterCategory) return false;
-      if (_filterFrom != null || _filterTo != null) {
-        if (e['date'] == null) return false;
-        final d = DateTime.parse(e['date']).toLocal();
-        final day = DateTime(d.year, d.month, d.day);
-        if (_filterFrom != null && day.isBefore(_filterFrom!)) return false;
-        if (_filterTo != null && day.isAfter(_filterTo!)) return false;
-      }
       return true;
     }).toList();
   }
@@ -124,13 +125,16 @@ class _PaymentScreenState extends State<PaymentScreen>
       _filterFrom != null ||
       _filterTo != null;
 
-  void _clearFilters() => setState(() {
-        _filterBranch = null;
-        _filterParty = null;
-        _filterCategory = null;
-        _filterFrom = null;
-        _filterTo = null;
-      });
+  void _clearFilters() {
+    setState(() {
+      _filterBranch = null;
+      _filterParty = null;
+      _filterCategory = null;
+      _filterFrom = null;
+      _filterTo = null;
+    });
+    _load();
+  }
 
   Future<void> _pickDate(bool isFrom) async {
     final now = DateTime.now();
@@ -160,6 +164,7 @@ class _PaymentScreenState extends State<PaymentScreen>
         _filterTo = DateTime(picked.year, picked.month, picked.day);
       }
     });
+    _load();
   }
 
   List get _incoming =>
@@ -355,7 +360,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                   child:
                       Text(b['name'] ?? '', overflow: TextOverflow.ellipsis)))
               .toList(),
-          onChanged: (v) => setState(() => _filterBranch = v),
+          onChanged: (v) { setState(() => _filterBranch = v); _load(); },
           activeColor: activeColor,
         );
 
@@ -384,7 +389,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             DropdownMenuItem(value: 'expense', child: Text('Expense')),
             DropdownMenuItem(value: 'other', child: Text('Other')),
           ],
-          onChanged: (v) => setState(() => _filterCategory = v),
+          onChanged: (v) { setState(() => _filterCategory = v); _load(); },
           activeColor: activeColor,
         );
 
@@ -688,7 +693,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   Widget _buildIncomingCard(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
         : '—';
     final fmt = NumberFormat('#,##0.##');
     final amount = double.tryParse('${item['amount']}') ?? 0;
@@ -716,66 +721,106 @@ class _PaymentScreenState extends State<PaymentScreen>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: IntrinsicHeight(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Container(width: 4, color: strip),
-            Expanded(
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Row(children: [
-                  CircleAvatar(
-                    radius: 17,
-                    backgroundColor: _payGreen.withValues(alpha: 0.1),
-                    child: const Icon(Icons.arrow_downward_rounded,
-                        size: 15, color: _payGreen),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(item['partyName'] ?? '—',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: _payPrimary)),
-                          const SizedBox(height: 3),
-                          Row(children: [
-                            _modeBadge(item['paymentMode'] ?? ''),
-                            if (item['referenceNo'] != null &&
-                                item['referenceNo'] != '') ...[
-                              const SizedBox(width: 6),
-                              Text('Ref: ${item['referenceNo']}',
-                                  style: const TextStyle(
-                                      fontSize: 10, color: Color(0xFF9CA3AF))),
-                            ],
+        child: Column(children: [
+          IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Container(width: 4, color: strip),
+              Expanded(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(children: [
+                    CircleAvatar(
+                      radius: 17,
+                      backgroundColor: _payGreen.withValues(alpha: 0.1),
+                      child: const Icon(Icons.arrow_downward_rounded,
+                          size: 15, color: _payGreen),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item['partyName'] ?? '—',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: _payPrimary)),
+                            const SizedBox(height: 3),
+                            Row(children: [
+                              _modeBadge(item['paymentMode'] ?? ''),
+                              if ((item['category'] ?? '') == 'measurement') ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                      color: const Color(0xFF0891B2)
+                                          .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6)),
+                                  child: const Text('Measurement',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF0891B2))),
+                                ),
+                              ],
+                              if (item['referenceNo'] != null &&
+                                  item['referenceNo'] != '') ...[
+                                const SizedBox(width: 6),
+                                Text('Ref: ${item['referenceNo']}',
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Color(0xFF9CA3AF))),
+                              ],
+                            ]),
                           ]),
-                        ]),
-                  ),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('₹${fmt.format(amount)}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            color: _payGreen)),
-                    const SizedBox(height: 2),
-                    Row(children: [
-                      const Icon(Icons.calendar_today_outlined,
-                          size: 10, color: Color(0xFF9CA3AF)),
-                      const SizedBox(width: 3),
-                      Text(date,
+                    ),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('₹${fmt.format(amount)}',
                           style: const TextStyle(
-                              fontSize: 10, color: Color(0xFF9CA3AF))),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: _payGreen)),
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        const Icon(Icons.calendar_today_outlined,
+                            size: 10, color: Color(0xFF9CA3AF)),
+                        const SizedBox(width: 3),
+                        Text(date,
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF9CA3AF))),
+                      ]),
                     ]),
+                    const SizedBox(width: 4),
+                    _actionMenu(item),
                   ]),
-                  const SizedBox(width: 4),
-                  _actionMenu(item),
-                ]),
+                ),
               ),
+            ]),
+          ),
+          if ((item['category'] ?? '') == 'measurement' &&
+              ((item['thisWeekOutstanding'] ?? 0) as num).toDouble() > 0) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFE0F7FA),
+                border: Border(top: BorderSide(color: Color(0xFFBAE6FD))),
+              ),
+              child: Row(children: [
+                if (((item['previousOutstanding'] ?? 0) as num).toDouble() > 0) ...[
+                  _attCell(Icons.history_rounded,
+                      'Prev ₹${NumberFormat('#,##0.##').format(((item['previousOutstanding'] ?? 0) as num).toDouble())}',
+                      _payAmber),
+                  const SizedBox(width: 12),
+                ],
+                _attCell(Icons.pending_actions_rounded,
+                    'Outstanding ₹${NumberFormat('#,##0.##').format(((item['thisWeekOutstanding'] ?? 0) as num).toDouble())}',
+                    _payRed),
+              ]),
             ),
-          ]),
-        ),
+          ],
+        ]),
       ),
     );
   }
@@ -1304,7 +1349,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     final catColor = _categoryColor(category);
     final catIcon = _categoryIcon(category);
     final payDate = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
         : '—';
     final fmt = NumberFormat('#,##0.##');
     final paid = double.tryParse('${item['amount']}') ?? 0;
@@ -1561,6 +1606,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   Widget _actionMenu(Map item) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_horiz_rounded,
           size: 18, color: Color(0xFF9CA3AF)),
@@ -1652,6 +1698,16 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   final Set<String> _selectedExpenseIds = {};
   final _expensePayableCtrl = TextEditingController();
 
+  // Measurement income state
+  List _measItems = [];
+  bool _measLoading = false;
+  late DateTime _measFrom;
+  late DateTime _measTo;
+  double _measPrevOutstanding = 0.0;
+  double _measStoredThisWeekOutstanding = 0.0;
+  final Set<String> _selectedMeasIds = {};
+  final _measPayableCtrl = TextEditingController();
+
   double get _pendingAmt {
     final due = double.tryParse(_totalDueCtrl.text) ?? 0;
     final paying = double.tryParse(_amountCtrl.text) ?? 0;
@@ -1681,6 +1737,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   void initState() {
     super.initState();
     _type = widget.defaultType;
+    _category = widget.defaultType == 'received' ? 'regular' : 'expense';
     // Default date ranges = current week Sun→Sat
     final sunday = _weekSunday();
     _laborFrom = sunday;
@@ -1689,6 +1746,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     _transportTo = sunday.add(const Duration(days: 6));
     _expenseFrom = sunday;
     _expenseTo = sunday.add(const Duration(days: 6));
+    _measFrom = sunday;
+    _measTo = sunday.add(const Duration(days: 6));
     _loadDropdowns();
     if (widget.item != null) {
       final e = widget.item!;
@@ -1711,7 +1770,18 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               : '';
       _refCtrl.text = e['referenceNo'] ?? '';
       _descCtrl.text = e['description'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']);
+      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      // Measurement-specific fields
+      if (_category == 'measurement') {
+        if (e['periodFrom'] != null)
+          _measFrom = DateTime.parse(e['periodFrom'] as String).toLocal();
+        if (e['periodTo'] != null)
+          _measTo = DateTime.parse(e['periodTo'] as String).toLocal();
+        _measPrevOutstanding =
+            ((e['previousOutstanding'] ?? 0) as num).toDouble();
+        _measStoredThisWeekOutstanding =
+            ((e['thisWeekOutstanding'] ?? 0) as num).toDouble();
+      }
     }
   }
 
@@ -1726,6 +1796,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     _payableCtrl.dispose();
     _transportPayableCtrl.dispose();
     _expensePayableCtrl.dispose();
+    _measPayableCtrl.dispose();
     super.dispose();
   }
 
@@ -1828,6 +1899,30 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   // ── Expense payment getters ───────────────────────────────────────────────
   bool get _isExpenseMode => _type == 'paid' && _category == 'expense';
 
+  // ── Measurement income getters ─────────────────────────────────────────────
+  bool get _isMeasurementMode => _type == 'received' && _category == 'measurement';
+
+  double get _measTotalAmount => _measItems
+      .where((m) => _selectedMeasIds.contains(m['_id'].toString()))
+      .fold(0.0, (s, m) => s + ((m['totalAmount'] as num?)?.toDouble() ?? 0));
+
+  double get _measThisWeekOutstanding {
+    final receivable =
+        double.tryParse(_measPayableCtrl.text) ?? _measTotalAmount;
+    return (_measPrevOutstanding + _measTotalAmount - receivable)
+        .clamp(0.0, double.infinity);
+  }
+
+  // Edit-mode outstanding: recalculates as the user changes the amount field.
+  // Formula: storedOutstanding + originalAmount - newAmount
+  double get _measEditOutstanding {
+    final originalAmount =
+        ((widget.item?['amount']) as num?)?.toDouble() ?? 0;
+    final newAmount = double.tryParse(_amountCtrl.text) ?? originalAmount;
+    return (_measStoredThisWeekOutstanding + originalAmount - newAmount)
+        .clamp(0.0, double.infinity);
+  }
+
   double get _expenseTotalAmount => _expenseItems
       .where((e) => _selectedExpenseIds.contains(e['_id'].toString()))
       .fold(0.0, (s, e) => s + ((e['amount'] ?? 0) as num).toDouble());
@@ -1865,6 +1960,90 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       _selectedExpenseIds.addAll(list.map((e) => e['_id'].toString()));
     });
     _syncExpensePayable();
+  }
+
+  Future<void> _loadMeasurements() async {
+    setState(() {
+      _measLoading = true;
+      _measItems = [];
+      _selectedMeasIds.clear();
+      _measPrevOutstanding = 0.0;
+    });
+    try {
+      // Let server do branch + date filtering; also fetch previous outstanding
+      final results = await Future.wait([
+        ApiService.get('/measurements', params: {
+          if (_branchId != null) 'branch': _branchId!,
+          'from': _measFrom.toIso8601String(),
+          'to': DateTime(_measTo.year, _measTo.month, _measTo.day, 23, 59, 59)
+              .toIso8601String(),
+          'isPaid': 'false',
+          'limit': '1000',
+        }),
+        ApiService.get('/payments', params: {
+          'category': 'measurement',
+          'type': 'received',
+          if (_branchId != null) 'branch': _branchId!,
+          'limit': '50',
+        }),
+      ]);
+      if (!mounted) return;
+
+      // Only keep entries that have a non-zero totalAmount (priced measurements)
+      final list = (results[0]['data'] as List? ?? []).where((m) {
+        return ((m['totalAmount'] as num?)?.toDouble() ?? 0) > 0;
+      }).toList();
+
+      // Find most-recent previous measurement-income payment (before this period)
+      final prevPayments = (results[1]['data'] as List? ?? [])
+          .where((p) {
+            if (p['date'] == null) return false;
+            final d = DateTime.parse(p['date'] as String);
+            return DateTime(d.year, d.month, d.day).isBefore(_measFrom);
+          })
+          .toList()
+        ..sort((a, b) {
+          final da = DateTime.parse(a['date'] as String);
+          final db = DateTime.parse(b['date'] as String);
+          return db.compareTo(da); // newest first
+        });
+      final prevOutstanding = prevPayments.isNotEmpty
+          ? ((prevPayments.first['thisWeekOutstanding'] ?? 0) as num).toDouble()
+          : 0.0;
+
+      setState(() {
+        _measItems = list;
+        _measLoading = false;
+        _measPrevOutstanding = prevOutstanding;
+        _selectedMeasIds.addAll(list.map((m) => m['_id'].toString()));
+      });
+      _measPayableCtrl.text =
+          (_measPrevOutstanding + _measTotalAmount).toStringAsFixed(2);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _measLoading = false);
+        showSnack(context, 'Failed to load measurements', error: true);
+      }
+    }
+  }
+
+  Future<void> _pickMeasDate({required bool isFrom}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom ? _measFrom : _measTo,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.light(primary: Color(0xFF0891B2))),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) _measFrom = picked;
+      else _measTo = picked;
+    });
   }
 
   Future<void> _pickExpenseDate({required bool isFrom}) async {
@@ -2018,6 +2197,84 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+
+    // ── Measurement income ────────────────────────────────────────────────────
+    if (_isMeasurementMode) {
+      // Edit path — update the existing payment record
+      if (_isEdit) {
+        final body = <String, dynamic>{
+          'branch': _branchId,
+          'partyName': _partyCtrl.text,
+          'amount': double.tryParse(_amountCtrl.text) ?? 0,
+          'paymentMode': _mode,
+          'type': 'received',
+          'category': 'measurement',
+          'date': _date.toIso8601String(),
+          'referenceNo': _refCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+          'periodFrom': _measFrom.toIso8601String(),
+          'periodTo': _measTo.toIso8601String(),
+          'previousOutstanding': _measPrevOutstanding,
+          'thisWeekOutstanding': double.parse(_measEditOutstanding.toStringAsFixed(2)),
+        };
+        final res =
+            await ApiService.put('/payments/${widget.item!['_id']}', body);
+        if (mounted) {
+          setState(() => _saving = false);
+          if (res['success'] == true) {
+            showSnack(context, 'Updated!');
+            widget.onSaved();
+          } else {
+            showSnack(context, res['message'] ?? 'Save failed', error: true);
+          }
+        }
+        return;
+      }
+
+      // New batch path
+      final selected = _measItems
+          .where((m) => _selectedMeasIds.contains(m['_id'].toString()))
+          .toList();
+      if (selected.isEmpty) {
+        showSnack(context, 'Select at least one measurement', error: true);
+        setState(() => _saving = false);
+        return;
+      }
+      final totalPayable =
+          double.tryParse(_measPayableCtrl.text) ?? _measTotalAmount;
+      final branch = _branchId ??
+          (selected.first['branch'] is Map
+              ? selected.first['branch']['_id']
+              : null);
+      final body = <String, dynamic>{
+        'branch': branch,
+        'partyName': 'Measurement Income (${selected.length})',
+        'amount': double.parse(totalPayable.toStringAsFixed(2)),
+        'paymentMode': _mode,
+        'type': 'received',
+        'category': 'measurement',
+        'date': _date.toIso8601String(),
+        'referenceNo': _refCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'periodFrom': _measFrom.toIso8601String(),
+        'periodTo': _measTo.toIso8601String(),
+        'previousOutstanding': _measPrevOutstanding,
+        'thisWeekOutstanding': double.parse(_measThisWeekOutstanding.toStringAsFixed(2)),
+        'measurementIds': selected.map((m) => m['_id'].toString()).toList(),
+      };
+      final res = await ApiService.post('/payments', body);
+      if (mounted) {
+        setState(() => _saving = false);
+        if (res['success'] == true) {
+          showSnack(context,
+              'Income recorded for ${selected.length} measurement${selected.length == 1 ? '' : 's'}');
+          widget.onSaved();
+        } else {
+          showSnack(context, res['message'] ?? 'Save failed', error: true);
+        }
+      }
+      return;
+    }
 
     // ── Labour batch payment ──────────────────────────────────────────────────
     if (_isLaborMode) {
@@ -2315,36 +2572,60 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         child: Form(
           key: _formKey,
           child: ListView(padding: const EdgeInsets.all(20), children: [
-            // Type toggle
-            Row(children: [
-              Expanded(
-                  child: _typeBtn('received', 'Incoming',
-                      Icons.arrow_downward_rounded, _payGreen)),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: _typeBtn(
-                      'paid', 'Outgoing', Icons.arrow_upward_rounded, _payRed)),
-            ]),
-            const SizedBox(height: 16),
-            // Category (outgoing only)
-            if (isOutgoing) ...[
+            // In edit mode show a locked type/category badge; for new show toggles
+            if (_isEdit) ...[
+              _buildEditModeBadge(),
+              const SizedBox(height: 16),
+            ] else ...[
+              // Type toggle
               Row(children: [
                 Expanded(
-                    child: _catBtn('labor', 'Labor',
-                        Icons.people_outline_rounded, _payPurple)),
-                const SizedBox(width: 8),
+                    child: _typeBtn('received', 'Incoming',
+                        Icons.arrow_downward_rounded, _payGreen)),
+                const SizedBox(width: 10),
                 Expanded(
-                    child: _catBtn('transport', 'Transport',
-                        Icons.local_shipping_outlined, _payBlue)),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: _catBtn('expense', 'Expense',
-                        Icons.receipt_long_outlined, _payOrange)),
+                    child: _typeBtn('paid', 'Outgoing',
+                        Icons.arrow_upward_rounded, _payRed)),
               ]),
               const SizedBox(height: 16),
+              // Category (outgoing only)
+              if (isOutgoing) ...[
+                Row(children: [
+                  Expanded(
+                      child: _catBtn('labor', 'Labor',
+                          Icons.people_outline_rounded, _payPurple)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _catBtn('transport', 'Transport',
+                          Icons.local_shipping_outlined, _payBlue)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _catBtn('expense', 'Expense',
+                          Icons.receipt_long_outlined, _payOrange)),
+                ]),
+                const SizedBox(height: 16),
+              ],
+              // Income category (incoming only)
+              if (!isOutgoing) ...[
+                Row(children: [
+                  Expanded(
+                      child: _catBtn('regular', 'Regular Income',
+                          Icons.payment_outlined, _payGreen)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _catBtn('measurement', 'Measurement',
+                          Icons.straighten_rounded,
+                          const Color(0xFF0891B2))),
+                ]),
+                const SizedBox(height: 16),
+              ],
             ],
-            // ── Labour / Transport mode (batch only — not for editing) ────────
-            if (_isLaborMode && !_isEdit) ...[
+            // ── Batch / edit modes ────────────────────────────────────────────
+            if (_isMeasurementMode && _isEdit) ...[
+              _buildMeasurementEditSection(),
+            ] else if (_isMeasurementMode && !_isEdit) ...[
+              _buildMeasurementSection(),
+            ] else if (_isLaborMode && !_isEdit) ...[
               _buildLaborSection(),
             ] else if (_isTransportMode && !_isEdit) ...[
               _buildTransportSection(),
@@ -2513,32 +2794,567 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               child: ElevatedButton(
                 onPressed: _saving ? null : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isLaborMode
-                      ? _payPurple
-                      : (_isTransportMode
-                          ? _payBlue
-                          : (_isExpenseMode
-                              ? _payOrange
-                              : (isOutgoing ? _payRed : _payGreen))),
+                  backgroundColor: _isMeasurementMode
+                      ? const Color(0xFF0891B2)
+                      : (_isLaborMode
+                          ? _payPurple
+                          : (_isTransportMode
+                              ? _payBlue
+                              : (_isExpenseMode
+                                  ? _payOrange
+                                  : (isOutgoing ? _payRed : _payGreen)))),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
                 ),
                 child: _saving
                     ? const ButtonLoader()
-                    : Text(_isLaborMode
-                        ? 'Record Payment for ${_selectedEmpIds.length} Employee${_selectedEmpIds.length == 1 ? '' : 's'}'
-                        : (_isTransportMode
-                            ? 'Record Payment for ${_selectedVehicles.length} Vehicle${_selectedVehicles.length == 1 ? '' : 's'}'
-                            : (_isExpenseMode
-                                ? 'Pay ${_selectedExpenseIds.length} Expense${_selectedExpenseIds.length == 1 ? '' : 's'}'
-                                : (_isEdit
-                                    ? 'Update Payment'
-                                    : (isOutgoing ? 'Record Payment' : 'Record Income'))))),
+                    : Text(_isMeasurementMode
+                        ? 'Record Income for ${_selectedMeasIds.length} Measurement${_selectedMeasIds.length == 1 ? '' : 's'}'
+                        : (_isLaborMode
+                            ? 'Record Payment for ${_selectedEmpIds.length} Employee${_selectedEmpIds.length == 1 ? '' : 's'}'
+                            : (_isTransportMode
+                                ? 'Record Payment for ${_selectedVehicles.length} Vehicle${_selectedVehicles.length == 1 ? '' : 's'}'
+                                : (_isExpenseMode
+                                    ? 'Pay ${_selectedExpenseIds.length} Expense${_selectedExpenseIds.length == 1 ? '' : 's'}'
+                                    : (_isEdit
+                                        ? 'Update Payment'
+                                        : (isOutgoing
+                                            ? 'Record Payment'
+                                            : 'Record Income')))))),
               ),
             ),
           ]),
         ),
+      ),
+    ]);
+  }
+
+  // ── Measurement income section ────────────────────────────────────────────
+
+  Widget _buildMeasurementSection() {
+    final fmt  = NumberFormat('#,##0.00');
+    final dfmt = DateFormat('dd MMM yyyy');
+    const color = Color(0xFF0891B2);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Branch with All option
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFDDE3E0)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _branchId,
+            isExpanded: true,
+            hint: const Row(children: [
+              Icon(Icons.store_outlined, size: 14, color: Color(0xFF9CA3AF)),
+              SizedBox(width: 6),
+              Text('All Branches',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+            ]),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF111827)),
+            items: [
+              const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('All Branches',
+                      style: TextStyle(color: Color(0xFF9CA3AF)))),
+              ..._branches.map<DropdownMenuItem<String>>((b) =>
+                  DropdownMenuItem(
+                      value: b['_id'] as String,
+                      child: Text(b['name'] as String))),
+            ],
+            onChanged: (v) => setState(() {
+              _branchId = v;
+              _measItems = [];
+              _selectedMeasIds.clear();
+            }),
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+
+      // Date range + Load button
+      Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _pickMeasDate(isFrom: true),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color),
+              ),
+              child: Row(children: [
+                const Icon(Icons.calendar_today_outlined,
+                    size: 13, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: Text(dfmt.format(_measFrom),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w600))),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _pickMeasDate(isFrom: false),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color),
+              ),
+              child: Row(children: [
+                const Icon(Icons.calendar_month_outlined,
+                    size: 13, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: Text(dfmt.format(_measTo),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w600))),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: _measLoading ? null : _loadMeasurements,
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(10)),
+            child: _measLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 44,
+                    child: Center(
+                        child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))))
+                : const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.search_rounded, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text('Load',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600)),
+                  ]),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 12),
+
+      // Empty state
+      if (_measItems.isEmpty && !_measLoading)
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.straighten_rounded,
+                size: 28, color: color.withValues(alpha: 0.4)),
+            const SizedBox(height: 8),
+            const Text('Select branch & tap Load',
+                style:
+                    TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+          ]),
+        )
+      else ...[
+        // Table header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.07),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(10)),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Row(children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Checkbox(
+                value: _selectedMeasIds.length == _measItems.length &&
+                    _measItems.isNotEmpty,
+                tristate: _selectedMeasIds.isNotEmpty &&
+                    _selectedMeasIds.length < _measItems.length,
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      _selectedMeasIds.addAll(
+                          _measItems.map((m) => m['_id'].toString()));
+                    } else {
+                      _selectedMeasIds.clear();
+                    }
+                  });
+                  _measPayableCtrl.text =
+                      _measTotalAmount.toStringAsFixed(2);
+                },
+                activeColor: color,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+                child: Text('Location / Site',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151)))),
+            const SizedBox(
+                width: 62,
+                child: Text('Date',
+                    textAlign: TextAlign.center,
+                    style:
+                        TextStyle(fontSize: 10, color: Color(0xFF6B7280)))),
+            const SizedBox(
+                width: 72,
+                child: Text('Amount',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151)))),
+          ]),
+        ),
+
+        // Measurement rows
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius:
+                const BorderRadius.vertical(bottom: Radius.circular(10)),
+          ),
+          child: Column(
+            children: _measItems.asMap().entries.map((entry) {
+              final i = entry.key;
+              final m = entry.value as Map;
+              final id = m['_id'].toString();
+              final selected = _selectedMeasIds.contains(id);
+              final amt = (m['totalAmount'] as num?)?.toDouble() ?? 0;
+              final location = (m['location'] ?? '') as String;
+              final site = (m['site'] ?? '') as String;
+              final mDate = m['date'] != null
+                  ? DateFormat('d MMM').format(
+                      DateTime.parse(m['date'] as String))
+                  : '—';
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: selected
+                      ? color.withValues(alpha: 0.04)
+                      : Colors.white,
+                  border: i < _measItems.length - 1
+                      ? const Border(
+                          bottom: BorderSide(color: Color(0xFFF3F4F6)))
+                      : null,
+                ),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (selected) {
+                        _selectedMeasIds.remove(id);
+                      } else {
+                        _selectedMeasIds.add(id);
+                      }
+                    });
+                    _measPayableCtrl.text =
+                        _measTotalAmount.toStringAsFixed(2);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 9),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Checkbox(
+                          value: selected,
+                          onChanged: (v) {
+                            setState(() {
+                              if (v == true) {
+                                _selectedMeasIds.add(id);
+                              } else {
+                                _selectedMeasIds.remove(id);
+                              }
+                            });
+                            _measPayableCtrl.text =
+                                _measTotalAmount.toStringAsFixed(2);
+                          },
+                          activeColor: color,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text(
+                              location.isNotEmpty ? location : '—',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF111827))),
+                          if (site.isNotEmpty)
+                            Text(site,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF9CA3AF))),
+                        ]),
+                      ),
+                      SizedBox(
+                          width: 62,
+                          child: Text(mDate,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF6B7280)))),
+                      SizedBox(
+                          width: 72,
+                          child: Text('₹${fmt.format(amt)}',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: selected
+                                      ? color
+                                      : const Color(0xFF9CA3AF)))),
+                    ]),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Summary bar
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Column(children: [
+            _summaryRow('Last Week Outstanding',
+                '₹${fmt.format(_measPrevOutstanding)}', _payRed),
+            const SizedBox(height: 6),
+            _summaryRow(
+                '${_selectedMeasIds.length} measurement${_selectedMeasIds.length == 1 ? '' : 's'} selected',
+                '₹${fmt.format(_measTotalAmount)}',
+                color),
+            const SizedBox(height: 8),
+            Row(children: [
+              const Expanded(
+                child: Text('Receivable Amount',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF374151))),
+              ),
+              SizedBox(
+                width: 120,
+                child: TextFormField(
+                  controller: _measPayableCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color),
+                  decoration: InputDecoration(
+                    prefixText: '₹',
+                    prefixStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: color),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 6),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(
+                          color: color.withValues(alpha: 0.4)),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(6)),
+                      borderSide: BorderSide(color: color),
+                    ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ]),
+            const Divider(height: 16, color: Color(0xFFBAE6FD)),
+            _summaryRow('This Week Outstanding',
+                '₹${fmt.format(_measThisWeekOutstanding)}',
+                _payAmber,
+                bold: true),
+          ]),
+        ),
+      ],
+    ]);
+  }
+
+  // ── Measurement edit section ─────────────────────────────────────────────────
+
+  Widget _buildMeasurementEditSection() {
+    final fmt = NumberFormat('#,##0.00');
+    final dfmt = DateFormat('dd MMM yyyy');
+    const color = Color(0xFF0891B2);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Branch
+      AppDropdown<String>(
+        label: 'Branch',
+        value: _branchId,
+        items: _branches
+            .map<DropdownMenuItem<String>>((b) =>
+                DropdownMenuItem(value: b['_id'], child: Text(b['name'])))
+            .toList(),
+        onChanged: (v) => setState(() => _branchId = v),
+        validator: (v) => v == null ? 'Required' : null,
+      ),
+      const SizedBox(height: 14),
+
+      // Party name
+      TextFormField(
+        controller: _partyCtrl,
+        decoration: _dec('Party Name'),
+        validator: (v) => v!.isEmpty ? 'Required' : null,
+      ),
+      const SizedBox(height: 14),
+
+      // Period date pickers
+      Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _pickMeasDate(isFrom: true),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color),
+              ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Period From',
+                        style: TextStyle(fontSize: 10, color: color)),
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      const Icon(Icons.calendar_today_outlined,
+                          size: 12, color: color),
+                      const SizedBox(width: 4),
+                      Text(dfmt.format(_measFrom),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: color,
+                              fontWeight: FontWeight.w600)),
+                    ]),
+                  ]),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _pickMeasDate(isFrom: false),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color),
+              ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Period To',
+                        style: TextStyle(fontSize: 10, color: color)),
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      const Icon(Icons.calendar_month_outlined,
+                          size: 12, color: color),
+                      const SizedBox(width: 4),
+                      Text(dfmt.format(_measTo),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: color,
+                              fontWeight: FontWeight.w600)),
+                    ]),
+                  ]),
+            ),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 14),
+
+      // Outstanding summary
+      if (_measPrevOutstanding > 0 || _measEditOutstanding > 0) ...[
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Column(children: [
+            if (_measPrevOutstanding > 0) ...[
+              _summaryRow('Last Week Outstanding',
+                  '₹${fmt.format(_measPrevOutstanding)}', _payRed),
+              const SizedBox(height: 6),
+            ],
+            _summaryRow('This Week Outstanding',
+                '₹${fmt.format(_measEditOutstanding)}', _payAmber,
+                bold: true),
+          ]),
+        ),
+        const SizedBox(height: 14),
+      ],
+
+      // Amount
+      TextFormField(
+        controller: _amountCtrl,
+        keyboardType: TextInputType.number,
+        decoration: _dec('Amount Received (₹)'),
+        validator: (v) => v!.isEmpty ? 'Required' : null,
+        onChanged: (_) => setState(() {}),
       ),
     ]);
   }
@@ -3738,10 +4554,112 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     );
   }
 
+  Widget _buildEditModeBadge() {
+    final isOutgoing = _type == 'paid';
+    final typeColor = isOutgoing ? _payRed : _payGreen;
+    final typeIcon = isOutgoing
+        ? Icons.arrow_upward_rounded
+        : Icons.arrow_downward_rounded;
+    final typeLabel = isOutgoing ? 'Outgoing' : 'Incoming';
+
+    Color catColor;
+    IconData catIcon;
+    String catLabel;
+    switch (_category) {
+      case 'labor':
+        catColor = _payPurple;
+        catIcon = Icons.people_outline_rounded;
+        catLabel = 'Labor';
+        break;
+      case 'transport':
+        catColor = _payBlue;
+        catIcon = Icons.local_shipping_outlined;
+        catLabel = 'Transport';
+        break;
+      case 'measurement':
+        catColor = const Color(0xFF0891B2);
+        catIcon = Icons.straighten_rounded;
+        catLabel = 'Measurement';
+        break;
+      case 'regular':
+        catColor = _payGreen;
+        catIcon = Icons.payment_outlined;
+        catLabel = 'Regular Income';
+        break;
+      default:
+        catColor = _payOrange;
+        catIcon = Icons.receipt_long_outlined;
+        catLabel = 'Expense';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: typeColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: typeColor.withValues(alpha: 0.4)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(typeIcon, size: 13, color: typeColor),
+            const SizedBox(width: 5),
+            Text(typeLabel,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: typeColor)),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: catColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: catColor.withValues(alpha: 0.4)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(catIcon, size: 13, color: catColor),
+            const SizedBox(width: 5),
+            Text(catLabel,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: catColor)),
+          ]),
+        ),
+        const Spacer(),
+        const Icon(Icons.lock_outline_rounded, size: 14, color: Color(0xFF9CA3AF)),
+        const SizedBox(width: 4),
+        const Text('Read-only',
+            style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+      ]),
+    );
+  }
+
   Widget _typeBtn(String value, String label, IconData icon, Color color) {
     final active = _type == value;
     return GestureDetector(
-      onTap: () => setState(() => _type = value),
+      onTap: () => setState(() {
+        _type = value;
+        if (value == 'paid' &&
+            (_category == 'regular' || _category == 'measurement')) {
+          _category = 'expense';
+        }
+        if (value == 'received' &&
+            (_category == 'labor' ||
+                _category == 'transport' ||
+                _category == 'expense')) {
+          _category = 'regular';
+        }
+      }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 10),

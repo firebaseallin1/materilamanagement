@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -282,7 +284,7 @@ class _LocationScreenState extends State<LocationScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _openForm(loc),
+        onTap: null,
         hoverColor: const Color(0xFFF9FAFB),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -375,7 +377,7 @@ class _LocationScreenState extends State<LocationScreen> {
         ];
         final name = (loc['name'] ?? '') as String;
         return InkWell(
-          onTap: () => _openForm(loc),
+          onTap: null,
           borderRadius: BorderRadius.circular(10),
           child: Container(
             padding: const EdgeInsets.all(12),
@@ -429,6 +431,7 @@ class _LocationScreenState extends State<LocationScreen> {
   // ── Action menu ──────────────────────────────────────────────────────────
 
   Widget _actionMenu(Map loc) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(

@@ -16,6 +16,7 @@ import '../masters/location_screen.dart';
 import '../masters/branch_screen.dart';
 import '../masters/category_screen.dart';
 import '../masters/expense_category_screen.dart';
+import '../masters/measurement_type_screen.dart';
 import '../masters/user_category_screen.dart';
 import '../masters/user_screen.dart';
 import '../masters/employee_screen.dart';
@@ -259,6 +260,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         return auth.canAccess('expense_cat')
             ? const ExpenseCategoryScreen()
             : _accessDenied();
+      case 18:
+        return const MeasurementTypeScreen();
       case 13:
         return auth.canAccess('user_cat')
             ? const UserCategoryScreen()
@@ -424,8 +427,8 @@ class _TodaySectionState extends State<_TodaySection> {
     setState(() => _loading = true);
     final results = await Future.wait([
       ApiService.get('/payments', params: p),
-      ApiService.get('/stocks', params: p),
-      ApiService.get('/transports', params: p),
+      ApiService.get('/stock', params: p),
+      ApiService.get('/transport', params: p),
       ApiService.get('/expenses', params: p),
     ]);
     if (mounted) {
@@ -1370,9 +1373,6 @@ class _SidebarContent extends StatelessWidget {
                 if (auth.canAccess('advances'))
                   _navItem(14, Icons.account_balance_wallet_outlined,
                       'Advances', null),
-                if (auth.canAccess('outstanding'))
-                  _navItem(
-                      16, Icons.account_balance_outlined, 'Outstanding', null),
                 if (auth.canAccess('stock'))
                   _navItem(
                       2, Icons.inventory_2_outlined, 'Material Stock', null),
@@ -1410,6 +1410,7 @@ class _SidebarContent extends StatelessWidget {
                 if (auth.canAccess('user_cat'))
                   _navItem(
                       13, Icons.label_outline_rounded, 'User Category', null),
+                _navItem(18, Icons.straighten_rounded, 'Meas. Types', null),
                 if (auth.canAccess('materials'))
                   _navItem(7, Icons.widgets_outlined, 'Material', null),
                 if (auth.canAccess('employees'))
@@ -1824,6 +1825,7 @@ class _AttendanceBarChartCard extends StatefulWidget {
 class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
   List<Map<String, dynamic>> _chartData = [];
   bool _loading = true;
+  String _weekLabel = '';
 
   @override
   void initState() {
@@ -1834,13 +1836,19 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final now = DateTime.now();
-    final from = DateTime(now.year, now.month, now.day)
-        .subtract(const Duration(days: 6));
-    final to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    // Monday of the current calendar week
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final sunday = monday.add(const Duration(days: 6));
+    final to = DateTime(sunday.year, sunday.month, sunday.day, 23, 59, 59);
     final params = {
-      'from': from.toIso8601String(),
+      'from': monday.toIso8601String(),
       'to': to.toIso8601String(),
+      'limit': '2000',
     };
+
+    final mFmt = DateFormat('d MMM');
+    _weekLabel = '${mFmt.format(monday)} – ${mFmt.format(sunday)}';
 
     final results = await Future.wait([
       ApiService.get('/branches'),
@@ -1852,7 +1860,7 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
     final employees = results[1]['data'] as List? ?? [];
     final attendances = results[2]['data'] as List? ?? [];
 
-    // Build ordered branch id → name from the branches list
+    // Build ordered branch id → name
     final branchOrder = <String>[];
     final branchNames = <String, String>{};
     for (final b in branches) {
@@ -1870,25 +1878,30 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
       totalMap[id] = (totalMap[id] ?? 0) + 1;
     }
 
-    // Present count per branch from this week's attendance
-    final presentMap = <String, int>{};
+    // Unique employees present this week per branch (deduplicate by employee id)
+    final presentSet = <String, Set<String>>{};
     for (final rec in attendances) {
       if (rec['isPresent'] != true) continue;
-      final id = rec['branch']?['_id']?.toString() ?? '';
-      if (id.isEmpty) continue;
-      presentMap[id] = (presentMap[id] ?? 0) + 1;
+      final branchId = rec['branch']?['_id']?.toString() ?? '';
+      final empId = rec['employee']?['_id']?.toString() ?? '';
+      if (branchId.isEmpty || empId.isEmpty) continue;
+      (presentSet[branchId] ??= {}).add(empId);
     }
 
-    // All branches always shown, even with 0/0
     final chartData = branchOrder
         .map((id) => {
               'name': branchNames[id] ?? id,
-              'attendance': presentMap[id] ?? 0,
+              'attendance': presentSet[id]?.length ?? 0,
               'total': totalMap[id] ?? 0,
             })
         .toList();
 
-    if (mounted) setState(() { _chartData = chartData; _loading = false; });
+    if (mounted) {
+      setState(() {
+        _chartData = chartData;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -1918,26 +1931,34 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
     return _Card(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(children: [
-            const Text('Branch wise Attendance',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFD1FAE5)),
-              ),
-              child: Text(
-                '${_chartData.length} branches',
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF065F46)),
-              ),
-            ),
-          ]),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Branch wise Attendance',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFD1FAE5)),
+                  ),
+                  child: Text(
+                    '${_chartData.length} branches',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF065F46)),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(_weekLabel,
+                    style: const TextStyle(
+                        fontSize: 10, color: Color(0xFF9CA3AF))),
+              ]),
+            ]),
+          ),
           Row(children: [
             const _LegendDot(color: Color(0xFF2E7D52), label: 'Present'),
             const SizedBox(width: 14),
@@ -1966,7 +1987,13 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
         else
           SizedBox(
             height: 220,
-            child: BarChart(
+            child: LayoutBuilder(
+              builder: (_, cst) => SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: (_chartData.length * 80.0).clamp(
+                    cst.maxWidth, double.infinity),
+                child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
                 maxY: maxY,
@@ -2061,7 +2088,10 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
               swapAnimationDuration: const Duration(milliseconds: 900),
               swapAnimationCurve: Curves.easeInOut,
             ),
-          ),
+          ),        // inner SizedBox (width)
+        ),          // SingleChildScrollView
+      ),            // LayoutBuilder builder
+      ),            // outer SizedBox (height: 220)
       ]),
     );
   }

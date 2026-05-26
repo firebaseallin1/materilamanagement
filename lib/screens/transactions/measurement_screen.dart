@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/measurement_pdf.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -18,8 +21,10 @@ class _MeasRow {
   final TextEditingController dFtCtrl, dInCtrl; // Depth: feet, inches
   final TextEditingController nosCtrl, totalCtrl, beamCtrl, roomCtrl;
   String type; // 'inside' | 'open'
+  String? measurementTypeId;
+  String measurementTypeName;
 
-  _MeasRow({this.type = 'inside'})
+  _MeasRow({this.type = 'inside', this.measurementTypeId, this.measurementTypeName = ''})
       : lFtCtrl  = TextEditingController(),
         lInCtrl  = TextEditingController(text: '0'),
         dFtCtrl  = TextEditingController(),
@@ -39,6 +44,8 @@ class _MeasRow {
     required this.beamCtrl,
     required this.roomCtrl,
     required this.type,
+    this.measurementTypeId,
+    this.measurementTypeName = '',
   });
 
   factory _MeasRow.fromMap(Map r) {
@@ -69,7 +76,9 @@ class _MeasRow {
       totalCtrl: TextEditingController(text: _s(r['total'])),
       beamCtrl:  TextEditingController(text: (r['beamNo'] ?? '') as String),
       roomCtrl:  TextEditingController(text: (r['room'] ?? '') as String),
-      type:      (r['type'] as String?) ?? 'inside',
+      type:               (r['type'] as String?) ?? 'inside',
+      measurementTypeId:  r['measurementTypeId'] as String?,
+      measurementTypeName: (r['measurementTypeName'] ?? '') as String,
     );
   }
 
@@ -119,9 +128,11 @@ class _MeasRow {
         'd':     _dDecimal,
         'nos':   double.tryParse(nosCtrl.text) ?? 1,
         'total': double.tryParse(totalCtrl.text) ?? 0,
-        'beamNo': beamCtrl.text.trim(),
-        'type':  type,
-        'room':  roomCtrl.text.trim(),
+        'beamNo':              beamCtrl.text.trim(),
+        'type':                type,
+        'room':                roomCtrl.text.trim(),
+        'measurementTypeId':   measurementTypeId,
+        'measurementTypeName': measurementTypeName,
       };
 }
 
@@ -720,6 +731,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
         ? DateFormat('dd MMM yyyy')
             .format(DateTime.parse(item['date'] as String))
         : '—';
+    final dcNo    = (item['dcNo'] as String? ?? '');
     final location = (item['location'] as String? ?? '—');
     final site = (item['site'] as String? ?? '');
     final floor = (item['floor'] as String? ?? '');
@@ -742,7 +754,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
-          onTap: () => _openForm(item),
+          onTap: null,
           borderRadius: BorderRadius.circular(10),
           hoverColor: const Color(0xFFF0F9F4),
           child: Container(
@@ -771,7 +783,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // ── Row 1: date | location | menu ──────
+                                // ── Row 1: date | dcNo | location | menu ──
                                 Row(children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(
@@ -786,6 +798,24 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                                             fontWeight: FontWeight.w600,
                                             color: color)),
                                   ),
+                                  if (dcNo.isNotEmpty) ...[
+                                    const SizedBox(width: 5),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEFF6FF),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                            color: const Color(0xFFBFDBFE)),
+                                      ),
+                                      child: Text('DC $dcNo',
+                                          style: const TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF2563EB))),
+                                    ),
+                                  ],
                                   const SizedBox(width: 7),
                                   Expanded(
                                     child: Text(location,
@@ -882,12 +912,12 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                                     _statBadge('$insideCount inside', _msGreen),
                                     if (openCount > 0) ...[
                                       const SizedBox(width: 4),
-                                      _statBadge('$openCount open(−)', _msRed),
+                                      _statBadge('$openCount open(-)', _msRed),
                                     ],
                                     const Spacer(),
                                     if (openVal > 0)
                                       Text(
-                                        '${_fmtQ(gross)} − ${_fmtQ(openVal)}',
+                                        '${_fmtQ(gross)} - ${_fmtQ(openVal)}',
                                         style: const TextStyle(
                                             fontSize: 10,
                                             color: Color(0xFF9CA3AF)),
@@ -929,22 +959,32 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                 fontSize: 11, color: color, fontWeight: FontWeight.w500)),
       );
 
-  Widget _actionMenu(Map item) => SizedBox(
+  Widget _actionMenu(Map item) {
+    final isAdmin = context.read<AuthService>().isAdmin;
+    return SizedBox(
         width: 30,
         child: PopupMenuButton<String>(
           icon: const Icon(Icons.more_horiz_rounded,
               size: 16, color: Color(0xFF9CA3AF)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 3,
-          itemBuilder: (_) => const [
-            PopupMenuItem(
+          itemBuilder: (_) => [
+            if (isAdmin) const PopupMenuItem(
                 value: 'edit',
                 child: Row(children: [
                   Icon(Icons.edit_outlined, size: 14, color: Color(0xFF374151)),
                   SizedBox(width: 8),
                   Text('Edit', style: TextStyle(fontSize: 13)),
                 ])),
-            PopupMenuItem(
+            const PopupMenuItem(
+                value: 'pdf',
+                child: Row(children: [
+                  Icon(Icons.picture_as_pdf_outlined,
+                      size: 14, color: Color(0xFF1B3A27)),
+                  SizedBox(width: 8),
+                  Text('Print / PDF', style: TextStyle(fontSize: 13)),
+                ])),
+            if (isAdmin) const PopupMenuItem(
                 value: 'delete',
                 child: Row(children: [
                   Icon(Icons.delete_outline_rounded,
@@ -956,10 +996,12 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
           ],
           onSelected: (v) {
             if (v == 'edit') _openForm(item);
+            if (v == 'pdf') MeasurementPdf.generate(item);
             if (v == 'delete') _delete(item['_id'] as String);
           },
         ),
       );
+  }
 
   Widget _buildEmpty() => Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1013,6 +1055,7 @@ class MeasurementFormScreen extends StatefulWidget {
 class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   final _formKey = GlobalKey<FormState>();
   List _branches = [];
+  List _measTypes = [];
   String? _branchId;
   final _locationCtrl = TextEditingController();
   final _siteCtrl = TextEditingController();
@@ -1028,6 +1071,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   void initState() {
     super.initState();
     _loadBranches();
+    _loadMeasTypes();
     final e = widget.item;
     if (e != null) {
       _branchId = e['branch']?['_id'] as String?;
@@ -1065,6 +1109,11 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     if (mounted) setState(() => _branches = res['data'] ?? []);
   }
 
+  Future<void> _loadMeasTypes() async {
+    final res = await ApiService.get('/measurement-types');
+    if (mounted) setState(() => _measTypes = res['data'] ?? []);
+  }
+
   void _onBranchChanged(String? id) {
     setState(() => _branchId = id);
     if (id == null) return;
@@ -1099,6 +1148,17 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
       _netTotal * (double.tryParse(_amountCtrl.text) ?? 0);
 
   Future<void> _save() async {
+    if (_measTypes.isNotEmpty) {
+      final untyped = _rows
+          .where((r) => r.type != 'open' && r.measurementTypeId == null)
+          .length;
+      if (untyped > 0) {
+        showSnack(context,
+            'Select a Measurement Type for every inside row ($untyped row${untyped > 1 ? 's' : ''} missing)',
+            error: true);
+        return;
+      }
+    }
     setState(() => _saving = true);
     final rate = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final body = {
@@ -1234,6 +1294,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
             _buildHeaderCard(),
             const SizedBox(height: 12),
             _buildRowsSection(),
+            const SizedBox(height: 12),
+            _buildTypeSummaryCard(),
             const SizedBox(height: 100),
           ],
         ),
@@ -1449,9 +1511,9 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
             child: Row(children: [
               Expanded(child: _sectionTitle('Measurement Rows', Icons.table_rows_outlined)),
               const SizedBox(width: 8),
-              _addRowBtn('+ Inside', 'inside', _msGreen),
+              _addRowBtn('Add Row', 'inside', _msGreen),
               const SizedBox(width: 6),
-              _addRowBtn('+ Open(−)', 'open', _msRed),
+              _addRowBtn('+ Open(-)', 'open', _msRed),
             ]),
           ),
           LayoutBuilder(builder: (ctx, cs) {
@@ -1464,7 +1526,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                   padding: EdgeInsets.all(24),
                   child: Center(
                       child: Text(
-                          'No rows yet. Tap + Inside or + Open(−) to add.',
+                          'No rows yet. Tap Add Row or + Open(-) to add.',
                           style: TextStyle(
                               fontSize: 13, color: Color(0xFF9CA3AF)))),
                 )
@@ -1516,7 +1578,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
           const SizedBox(width: 4),
           Expanded(flex: 10, child: Text('Beam No.', style: _hdr())),
           const SizedBox(width: 4),
-          Expanded(flex: 7, child: Text('Type', style: _hdr())),
+          Expanded(flex: 10, child: Text('Meas. Type', style: _hdr())),
           const SizedBox(width: 28),
         ]),
       );
@@ -1652,37 +1714,70 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
               ),
             ),
             const SizedBox(width: 4),
-            // Type toggle
+            // Measurement Type dropdown (inside rows) or OPEN label
             Expanded(
-              flex: 7,
-              child: GestureDetector(
-                onTap: () => setState(() {
-                  _rows[i].type = isOpen ? 'inside' : 'open';
-                }),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: isOpen
-                        ? _msRed.withValues(alpha: 0.1)
-                        : _msGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: isOpen
-                            ? _msRed.withValues(alpha: 0.3)
-                            : _msGreen.withValues(alpha: 0.3)),
-                  ),
-                  child: Center(
-                    child: Text(
-                      isOpen ? 'OPEN' : 'INSIDE',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: isOpen ? _msRed : _msGreen),
+              flex: 10,
+              child: isOpen
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: _msRed.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: _msRed.withValues(alpha: 0.3)),
+                      ),
+                      child: const Center(
+                        child: Text('OPEN(-)',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: _msRed)),
+                      ),
+                    )
+                  : DropdownButtonFormField<String>(
+                      key: ValueKey('mt_${i}_${row.measurementTypeId}'),
+                      initialValue: row.measurementTypeId,
+                      decoration: _rowDec('— select —'),
+                      isExpanded: true,
+                      borderRadius: BorderRadius.circular(6),
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFF111827)),
+                      items: [
+                        const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('— select —',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF9CA3AF)))),
+                        // Ensure current value is present even if types not loaded yet
+                        if (row.measurementTypeId != null &&
+                            !_measTypes.any(
+                                (t) => t['_id'] == row.measurementTypeId))
+                          DropdownMenuItem<String>(
+                              value: row.measurementTypeId,
+                              child: Text(
+                                  row.measurementTypeName.isNotEmpty
+                                      ? row.measurementTypeName
+                                      : row.measurementTypeId!,
+                                  style: const TextStyle(fontSize: 11))),
+                        ..._measTypes.map((t) => DropdownMenuItem<String>(
+                              value: t['_id'] as String,
+                              child: Text(t['name'] as String,
+                                  style: const TextStyle(fontSize: 11)),
+                            )),
+                      ],
+                      onChanged: (v) => setState(() {
+                        _rows[i].measurementTypeId = v;
+                        _rows[i].measurementTypeName = v == null
+                            ? ''
+                            : (_measTypes.firstWhere(
+                                    (t) => t['_id'] == v,
+                                    orElse: () => {})['name']
+                                as String? ??
+                                '');
+                      }),
                     ),
-                  ),
-                ),
-              ),
             ),
             // Delete
             SizedBox(
@@ -1697,7 +1792,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
             ),
           ]),
         ),
-        // Room / description sub-row
+        // Room / Description sub-row
         Padding(
           padding: const EdgeInsets.fromLTRB(36, 0, 36, 7),
           child: TextFormField(
@@ -1706,6 +1801,49 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
             style: const TextStyle(fontSize: 11),
           ),
         ),
+      ]),
+    );
+  }
+
+  // ── Type summary ─────────────────────────────────────────────────────────
+
+  Widget _buildTypeSummaryCard() {
+    final Map<String, double> byType = {};
+    for (final row in _rows) {
+      if (row.type == 'open') continue;
+      final qty = double.tryParse(row.totalCtrl.text) ?? 0;
+      if (qty == 0 || row.measurementTypeName.isEmpty) continue;
+      byType[row.measurementTypeName] =
+          (byType[row.measurementTypeName] ?? 0) + qty;
+    }
+    if (byType.isEmpty) return const SizedBox.shrink();
+
+    return _card(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _sectionTitle('By Measurement Type', Icons.pie_chart_outline_rounded),
+        const SizedBox(height: 8),
+        ...byType.entries.map((e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                      color: _msGreen, borderRadius: BorderRadius.circular(4)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(e.key,
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF374151)))),
+                Text(_fmtQ(e.value),
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: _msBlue)),
+              ]),
+            )),
       ]),
     );
   }
@@ -1754,6 +1892,7 @@ class MeasurementFormPanel extends StatefulWidget {
 class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
   final _formKey = GlobalKey<FormState>();
   List _branches = [];
+  List _measTypes = [];
   String? _branchId;
   final _locationCtrl = TextEditingController();
   final _siteCtrl     = TextEditingController();
@@ -1769,6 +1908,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
   void initState() {
     super.initState();
     _loadBranches();
+    _loadMeasTypes();
     final e = widget.item;
     if (e != null) {
       _branchId         = e['branch']?['_id'] as String?;
@@ -1802,6 +1942,11 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
   Future<void> _loadBranches() async {
     final res = await ApiService.get('/branches');
     if (mounted) setState(() => _branches = res['data'] ?? []);
+  }
+
+  Future<void> _loadMeasTypes() async {
+    final res = await ApiService.get('/measurement-types');
+    if (mounted) setState(() => _measTypes = res['data'] ?? []);
   }
 
   void _onBranchChanged(String? id) {
@@ -1838,6 +1983,17 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
       _netTotal * (double.tryParse(_amountCtrl.text) ?? 0);
 
   Future<void> _save() async {
+    if (_measTypes.isNotEmpty) {
+      final untyped = _rows
+          .where((r) => r.type != 'open' && r.measurementTypeId == null)
+          .length;
+      if (untyped > 0) {
+        showSnack(context,
+            'Select a Measurement Type for every inside row ($untyped row${untyped > 1 ? 's' : ''} missing)',
+            error: true);
+        return;
+      }
+    }
     setState(() => _saving = true);
     final rate = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final body = {
@@ -1981,6 +2137,8 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
               _buildSiteSection(),
               const SizedBox(height: 12),
               _buildTableSection(),
+              const SizedBox(height: 12),
+              _buildTypeSummaryCard(),
             ],
           ),
         ),
@@ -2184,9 +2342,9 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
             child: Row(children: [
               Expanded(child: _secTitle('Measurement Rows', Icons.table_rows_outlined)),
               const SizedBox(width: 8),
-              _addBtn('+ Inside', 'inside', _msGreen),
+              _addBtn('Add Row', 'inside', _msGreen),
               const SizedBox(width: 6),
-              _addBtn('+ Open(−)', 'open', _msRed),
+              _addBtn('+ Open(-)', 'open', _msRed),
             ]),
           ),
           LayoutBuilder(builder: (ctx, cs) {
@@ -2212,7 +2370,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
                   _gap(),
                   _thF('Beam No.', 10),
                   _gap(),
-                  _thF('Type', 7),
+                  _thF('Meas. Type', 10),
                   const SizedBox(width: 26),
                 ]),
               ),
@@ -2223,7 +2381,7 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
                   padding: EdgeInsets.all(28),
                   child: Center(
                       child: Text(
-                          'No rows yet — tap + Inside or + Open(−) to begin.',
+                          'No rows yet — tap Add Row or + Open(-) to begin.',
                           style: TextStyle(
                               fontSize: 13, color: Color(0xFF9CA3AF)))),
                 )
@@ -2342,34 +2500,69 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
               style: const TextStyle(fontSize: 12),
             )),
             _gap(),
-            // Type toggle
+            // Measurement Type dropdown (inside rows) or OPEN label
             Expanded(
-              flex: 7,
-              child: GestureDetector(
-                onTap: () => setState(() {
-                  _rows[i].type = isOpen ? 'inside' : 'open';
-                }),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isOpen
-                        ? _msRed.withValues(alpha: 0.1)
-                        : _msGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(5),
-                    border: Border.all(
-                        color: isOpen
-                            ? _msRed.withValues(alpha: 0.3)
-                            : _msGreen.withValues(alpha: 0.3)),
-                  ),
-                  child: Center(
-                    child: Text(isOpen ? 'OPEN' : 'INSIDE',
-                        style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            color: isOpen ? _msRed : _msGreen)),
-                  ),
-                ),
-              ),
+              flex: 10,
+              child: isOpen
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _msRed.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                            color: _msRed.withValues(alpha: 0.3)),
+                      ),
+                      child: const Center(
+                        child: Text('OPEN(-)',
+                            style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: _msRed)),
+                      ),
+                    )
+                  : DropdownButtonFormField<String>(
+                      key: ValueKey('pmt_${i}_${row.measurementTypeId}'),
+                      initialValue: row.measurementTypeId,
+                      decoration: _rd('— select —'),
+                      isExpanded: true,
+                      borderRadius: BorderRadius.circular(5),
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFF111827)),
+                      items: [
+                        const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('— select —',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xFF9CA3AF)))),
+                        // Ensure current value is present even if types not loaded yet
+                        if (row.measurementTypeId != null &&
+                            !_measTypes.any(
+                                (t) => t['_id'] == row.measurementTypeId))
+                          DropdownMenuItem<String>(
+                              value: row.measurementTypeId,
+                              child: Text(
+                                  row.measurementTypeName.isNotEmpty
+                                      ? row.measurementTypeName
+                                      : row.measurementTypeId!,
+                                  style: const TextStyle(fontSize: 11))),
+                        ..._measTypes.map((t) => DropdownMenuItem<String>(
+                              value: t['_id'] as String,
+                              child: Text(t['name'] as String,
+                                  style: const TextStyle(fontSize: 11)),
+                            )),
+                      ],
+                      onChanged: (v) => setState(() {
+                        _rows[i].measurementTypeId = v;
+                        _rows[i].measurementTypeName = v == null
+                            ? ''
+                            : (_measTypes.firstWhere(
+                                    (t) => t['_id'] == v,
+                                    orElse: () => {})['name']
+                                as String? ??
+                                '');
+                      }),
+                    ),
             ),
             // Delete
             SizedBox(
@@ -2442,6 +2635,48 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
         const SizedBox(width: 8),
         const Expanded(child: Divider(thickness: 1, color: Color(0xFFE5E7EB))),
       ]);
+
+  Widget _buildTypeSummaryCard() {
+    final Map<String, double> byType = {};
+    for (final row in _rows) {
+      if (row.type == 'open') continue;
+      final qty = double.tryParse(row.totalCtrl.text) ?? 0;
+      if (qty == 0 || row.measurementTypeName.isEmpty) continue;
+      byType[row.measurementTypeName] =
+          (byType[row.measurementTypeName] ?? 0) + qty;
+    }
+    if (byType.isEmpty) return const SizedBox.shrink();
+
+    return _card(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _secTitle('By Measurement Type', Icons.pie_chart_outline_rounded),
+        const SizedBox(height: 8),
+        ...byType.entries.map((e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                      color: _msGreen,
+                      borderRadius: BorderRadius.circular(4)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: Text(e.key,
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF374151)))),
+                Text(_fmtQ(e.value),
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: _msBlue)),
+              ]),
+            )),
+      ]),
+    );
+  }
 }
 
 // ── Number formatter ──────────────────────────────────────────────────────────

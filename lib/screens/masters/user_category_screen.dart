@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../constants/screen_permissions.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -313,7 +315,7 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _openForm(c),
+        onTap: null,
         hoverColor: const Color(0xFFF9FAFB),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -369,7 +371,7 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
     final isActive = c['isActive'] ?? true;
     final desc = (c['description'] as String? ?? '').trim();
     return InkWell(
-      onTap: () => _openForm(c),
+      onTap: null,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -504,6 +506,7 @@ class _UserCategoryScreenState extends State<UserCategoryScreen> {
   }
 
   Widget _actionMenu(Map c) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(

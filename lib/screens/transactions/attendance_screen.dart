@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -28,6 +30,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   static const _primary = Color(0xFF111827);
   static const _green = Color(0xFF16A34A);
+
+  static String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   static DateTime _weekSunday() {
     final now = DateTime.now();
@@ -62,11 +67,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final params = <String, String>{};
-    if (_fromDate != null) params['from'] = _fromDate!.toIso8601String();
-    if (_toDate != null) {
-      final end = DateTime(_toDate!.year, _toDate!.month, _toDate!.day, 23, 59, 59);
-      params['to'] = end.toIso8601String();
-    }
+    if (_fromDate != null) params['from'] = _fmtDate(_fromDate!);
+    if (_toDate != null) params['to'] = _fmtDate(_toDate!);
     if (_filterBranchId != null) params['branch'] = _filterBranchId!;
     if (_filterEmployeeId != null) params['employee'] = _filterEmployeeId!;
     final res = await ApiService.get('/attendance', params: params);
@@ -549,7 +551,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Widget _buildRow(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
         : '—';
     final isPresent = item['isPresent'] == true;
     final presentHrs = isPresent ? 8 : 0;
@@ -623,7 +625,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Widget _mobileCard(Map item) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
         : '—';
     final isPresent = item['isPresent'] == true;
     final presentHrs = isPresent ? 8 : 0;
@@ -690,6 +692,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   );
 
   Widget _actionMenu(Map item) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton(
@@ -755,7 +758,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
       _otHoursCtrl.text = e['otHours'] != null && e['otHours'] != 0 ? e['otHours'].toString() : '';
       _hourRateCtrl.text = e['hourRate'] != null && e['hourRate'] != 0 ? e['hourRate'].toString() : '';
       _remarksCtrl.text = e['remarks'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']);
+      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
     }
   }
 

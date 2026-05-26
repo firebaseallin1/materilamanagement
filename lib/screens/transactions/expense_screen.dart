@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
@@ -659,7 +661,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   Widget _buildCard(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
         : '—';
     final color = _cardColor(index);
     final cat = (item['category'] as String? ?? '—');
@@ -672,7 +674,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          onTap: () => _openForm(item),
+          onTap: null,
           borderRadius: BorderRadius.circular(12),
           hoverColor: const Color(0xFFF0FDF4),
           child: Container(
@@ -805,7 +807,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   Widget _mobileCard(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']))
+        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
         : '—';
     final color = _cardColor(index);
     final cat = (item['category'] as String? ?? '—');
@@ -818,7 +820,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          onTap: () => _openForm(item),
+          onTap: null,
           borderRadius: BorderRadius.circular(12),
           child: Container(
             decoration: BoxDecoration(
@@ -937,6 +939,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   Widget _actionMenu(Map item) {
+    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
     return SizedBox(
       width: 40,
       child: PopupMenuButton<String>(
@@ -1061,7 +1064,7 @@ class _ExpenseFormPanelState extends State<ExpenseFormPanel> {
       _category = e['category'];
       _amountCtrl.text = '${e['amount'] ?? ''}';
       _descCtrl.text = e['description'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']);
+      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
     }
   }
 

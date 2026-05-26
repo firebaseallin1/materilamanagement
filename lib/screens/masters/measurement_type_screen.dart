@@ -6,20 +6,20 @@ import '../../widgets/common_widgets.dart';
 import '../../widgets/screen_header.dart';
 
 // ════════════════════════════════════════════════
-// EXPENSE CATEGORY SCREEN
+// MEASUREMENT TYPE SCREEN
 // ════════════════════════════════════════════════
-class ExpenseCategoryScreen extends StatefulWidget {
-  const ExpenseCategoryScreen({super.key});
+class MeasurementTypeScreen extends StatefulWidget {
+  const MeasurementTypeScreen({super.key});
   @override
-  State<ExpenseCategoryScreen> createState() => _ExpenseCategoryScreenState();
+  State<MeasurementTypeScreen> createState() => _MeasurementTypeScreenState();
 }
 
-class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
-  List _categories = [];
+class _MeasurementTypeScreenState extends State<MeasurementTypeScreen> {
+  List _types = [];
   bool _loading = true;
   String _search = '';
   String? _error;
-  int _tabIndex = 0; // 0=All  1=Active  2=Inactive
+  int _tabIndex = 0;
   String _sortBy = 'name_asc';
 
   static const _primary = Color(0xFF111827);
@@ -27,7 +27,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   List get _filtered {
     final q = _search.toLowerCase();
-    var list = _categories.where((c) {
+    var list = _types.where((c) {
       final matchSearch =
           q.isEmpty || (c['name'] ?? '').toString().toLowerCase().contains(q);
       final isActive = c['isActive'] ?? true;
@@ -52,15 +52,12 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    final res = await ApiService.get('/expense-categories');
+    setState(() { _loading = true; _error = null; });
+    final res = await ApiService.get('/measurement-types');
     if (mounted) {
       setState(() {
         if (res['success'] == true) {
-          _categories = res['data'] ?? [];
+          _types = res['data'] ?? [];
           _error = null;
         } else {
           _error = res['message'] ?? 'Something went wrong';
@@ -70,7 +67,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     }
   }
 
-  void _openForm([Map? category]) {
+  void _openForm([Map? type]) {
     final sw = MediaQuery.of(context).size.width;
     final panelWidth = sw > 900 ? sw * 0.35 : sw * 0.85;
     showGeneralDialog(
@@ -82,13 +79,11 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         alignment: Alignment.centerRight,
         child: Material(
           elevation: 16,
-          borderRadius:
-              const BorderRadius.horizontal(left: Radius.circular(20)),
+          borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
           child: SizedBox(
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
-            child: ExpenseCategoryFormPanel(
-                category: category, onSaved: _load),
+            child: MeasurementTypeFormPanel(type: type, onSaved: _load),
           ),
         ),
       ),
@@ -102,7 +97,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Future<void> _delete(String id) async {
     if (!await confirmDelete(context)) return;
-    final res = await ApiService.delete('/expense-categories/$id');
+    final res = await ApiService.delete('/measurement-types/$id');
     if (mounted) {
       showSnack(context, res['success'] == true ? 'Deleted' : res['message'],
           error: res['success'] != true);
@@ -134,8 +129,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                 style: TextStyle(
                     fontSize: 13,
                     color: active ? _orange : const Color(0xFF374151),
-                    fontWeight:
-                        active ? FontWeight.w600 : FontWeight.normal)),
+                    fontWeight: active ? FontWeight.w600 : FontWeight.normal)),
           ]),
         );
       }).toList(),
@@ -148,10 +142,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     final box = ctx.findRenderObject() as RenderBox;
     final offset = box.localToGlobal(Offset.zero);
     return RelativeRect.fromLTRB(
-        offset.dx, offset.dy + box.size.height + 4, offset.dx + box.size.width, 0);
+        offset.dx, offset.dy + box.size.height + 4,
+        offset.dx + box.size.width, 0);
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -164,13 +157,13 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ScreenHeader(
-              title: 'Expense Categories',
-              subtitle: 'Manage expense category master data',
+              title: 'Measurement Types',
+              subtitle: 'Manage measurement type master data',
               onRefresh: _load,
               onSearchChanged: (v) => setState(() => _search = v),
-              searchHint: 'Search categories...',
+              searchHint: 'Search types...',
               onAdd: _openForm,
-              addLabel: 'Add Category',
+              addLabel: 'Add Type',
             ),
             if (!isMobile) _buildTabBar(),
             _buildToolbar(isMobile),
@@ -192,10 +185,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
     );
   }
 
-  // ── Tab bar ───────────────────────────────────────────────────────────────
-
   Widget _buildTabBar() {
-    final tabs = ['All Categories', 'Active', 'Inactive'];
+    final tabs = ['All Types', 'Active', 'Inactive'];
     return Container(
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -220,8 +211,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               child: Text(tabs[i],
                   style: TextStyle(
                       fontSize: 13,
-                      fontWeight:
-                          active ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                       color: active ? _orange : const Color(0xFF6B7280))),
             ),
           );
@@ -229,8 +219,6 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       ),
     );
   }
-
-  // ── Toolbar ───────────────────────────────────────────────────────────────
 
   Widget _buildToolbar(bool isMobile) {
     return Padding(
@@ -246,8 +234,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text('${_filtered.length} rows',
-              style:
-                  const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
         ),
       ]),
     );
@@ -275,14 +262,11 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
               style: TextStyle(
                   fontSize: 13,
                   color: sorted ? _orange : const Color(0xFF374151),
-                  fontWeight:
-                      sorted ? FontWeight.w500 : FontWeight.w400)),
+                  fontWeight: sorted ? FontWeight.w500 : FontWeight.w400)),
         ]),
       ),
     );
   }
-
-  // ── Desktop table ─────────────────────────────────────────────────────────
 
   Widget _buildTable(List rows) {
     return Column(children: [
@@ -292,7 +276,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         child: const Row(children: [
           SizedBox(width: 28, child: Text('#', style: _kHdr)),
           SizedBox(width: 12),
-          Expanded(flex: 3, child: Text('Category Name', style: _kHdr)),
+          Expanded(flex: 3, child: Text('Type Name', style: _kHdr)),
           Expanded(flex: 4, child: Text('Description', style: _kHdr)),
           SizedBox(
               width: 88,
@@ -320,8 +304,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: const BoxDecoration(
-              border: Border(
-                  bottom: BorderSide(color: Color(0xFFF3F4F6)))),
+              border:
+                  Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
           child: Row(children: [
             SizedBox(
               width: 28,
@@ -354,8 +338,6 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       ),
     );
   }
-
-  // ── Mobile list ───────────────────────────────────────────────────────────
 
   Widget _buildMobileList(List rows) {
     return ListView.separated(
@@ -398,9 +380,8 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                     color: desc.isNotEmpty
                         ? const Color(0xFF6B7280)
                         : const Color(0xFFD1D5DB),
-                    fontStyle: desc.isEmpty
-                        ? FontStyle.italic
-                        : FontStyle.normal),
+                    fontStyle:
+                        desc.isEmpty ? FontStyle.italic : FontStyle.normal),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -413,8 +394,6 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       ),
     );
   }
-
-  // ── Shared widgets ────────────────────────────────────────────────────────
 
   Widget _nameCell(Map c, int index) {
     return Row(children: [
@@ -433,9 +412,9 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
 
   Widget _avatar(Map c, int index, {double size = 28}) {
     const bgs = [
-      Color(0xFFEA580C), Color(0xFFDC2626), Color(0xFFDB2777),
-      Color(0xFF9333EA), Color(0xFF2563EB), Color(0xFF0D9488),
-      Color(0xFF16A34A), Color(0xFFF59E0B),
+      Color(0xFF2E7D52), Color(0xFF1B3A27), Color(0xFF0D9488),
+      Color(0xFF2563EB), Color(0xFF9333EA), Color(0xFFEA580C),
+      Color(0xFFDC2626), Color(0xFF16A34A),
     ];
     final bg = bgs[index % bgs.length];
     final name = c['name'] as String? ?? '';
@@ -488,8 +467,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           PopupMenuItem(
               value: 'edit',
               child: Row(children: [
-                Icon(Icons.edit_outlined,
-                    size: 15, color: Color(0xFF374151)),
+                Icon(Icons.edit_outlined, size: 15, color: Color(0xFF374151)),
                 SizedBox(width: 8),
                 Text('Edit', style: TextStyle(fontSize: 13)),
               ])),
@@ -500,8 +478,7 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
                     size: 15, color: Color(0xFFDC2626)),
                 SizedBox(width: 8),
                 Text('Delete',
-                    style: TextStyle(
-                        fontSize: 13, color: Color(0xFFDC2626))),
+                    style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
               ])),
         ],
         onSelected: (val) {
@@ -511,8 +488,6 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
       ),
     );
   }
-
-  // ── Error state ───────────────────────────────────────────────────────────
 
   Widget _buildError(String message) {
     return Center(
@@ -547,15 +522,12 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
             elevation: 0,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8)),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
         ),
       ]),
     );
   }
-
-  // ── Empty state ───────────────────────────────────────────────────────────
 
   Widget _buildEmpty() {
     final hasFilter = _search.isNotEmpty || _tabIndex != 0;
@@ -565,16 +537,14 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
+              color: const Color(0xFFDCFCE7),
               borderRadius: BorderRadius.circular(16)),
-          child: const Icon(Icons.receipt_long_outlined,
-              size: 28, color: Color(0xFF9CA3AF)),
+          child: const Icon(Icons.straighten_rounded,
+              size: 28, color: Color(0xFF16A34A)),
         ),
         const SizedBox(height: 14),
         Text(
-            hasFilter
-                ? 'No results found'
-                : 'No expense categories yet',
+            hasFilter ? 'No results found' : 'No measurement types yet',
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -583,16 +553,12 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
         Text(
             hasFilter
                 ? 'Try adjusting your search or filters.'
-                : 'Add your first expense category to get started.',
-            style:
-                const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                : 'Add your first measurement type to get started.',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
         if (hasFilter) ...[
           const SizedBox(height: 12),
           TextButton(
-            onPressed: () => setState(() {
-              _search = '';
-              _tabIndex = 0;
-            }),
+            onPressed: () => setState(() { _search = ''; _tabIndex = 0; }),
             child: const Text('Clear filters',
                 style: TextStyle(color: _orange)),
           ),
@@ -601,16 +567,14 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
           ElevatedButton.icon(
             onPressed: _openForm,
             icon: const Icon(Icons.add_rounded, size: 15),
-            label: const Text('Add Category',
-                style: TextStyle(fontSize: 13)),
+            label: const Text('Add Type', style: TextStyle(fontSize: 13)),
             style: ElevatedButton.styleFrom(
               backgroundColor: _primary,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
           ),
         ],
@@ -619,26 +583,21 @@ class _ExpenseCategoryScreenState extends State<ExpenseCategoryScreen> {
   }
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const _kHdr = TextStyle(
-    fontSize: 12,
-    color: Color(0xFF6B7280),
-    fontWeight: FontWeight.w500);
+    fontSize: 12, color: Color(0xFF6B7280), fontWeight: FontWeight.w500);
 
-// ── Expense Category Form Panel ───────────────────────────────────────────────
-class ExpenseCategoryFormPanel extends StatefulWidget {
-  final Map? category;
+// ── Measurement Type Form Panel ───────────────────────────────────────────────
+class MeasurementTypeFormPanel extends StatefulWidget {
+  final Map? type;
   final VoidCallback onSaved;
-  const ExpenseCategoryFormPanel(
-      {super.key, this.category, required this.onSaved});
+  const MeasurementTypeFormPanel(
+      {super.key, this.type, required this.onSaved});
   @override
-  State<ExpenseCategoryFormPanel> createState() =>
-      _ExpenseCategoryFormPanelState();
+  State<MeasurementTypeFormPanel> createState() =>
+      _MeasurementTypeFormPanelState();
 }
 
-class _ExpenseCategoryFormPanelState
-    extends State<ExpenseCategoryFormPanel> {
+class _MeasurementTypeFormPanelState extends State<MeasurementTypeFormPanel> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -649,16 +608,15 @@ class _ExpenseCategoryFormPanelState
   static const _accent = Color(0xFF2E7D52);
   static const _gradient2 = Color(0xFF1E6F5C);
 
-  bool get _isEdit =>
-      widget.category != null && widget.category!['_id'] != null;
+  bool get _isEdit => widget.type != null && widget.type!['_id'] != null;
 
   @override
   void initState() {
     super.initState();
-    if (widget.category != null) {
-      _nameCtrl.text = widget.category!['name'] ?? '';
-      _descCtrl.text = widget.category!['description'] ?? '';
-      _isActive = widget.category!['isActive'] ?? true;
+    if (widget.type != null) {
+      _nameCtrl.text = widget.type!['name'] ?? '';
+      _descCtrl.text = widget.type!['description'] ?? '';
+      _isActive = widget.type!['isActive'] ?? true;
     }
   }
 
@@ -678,9 +636,9 @@ class _ExpenseCategoryFormPanelState
       'isActive': _isActive,
     };
     final res = !_isEdit
-        ? await ApiService.post('/expense-categories', body)
+        ? await ApiService.post('/measurement-types', body)
         : await ApiService.put(
-            '/expense-categories/${widget.category!['_id']}', body);
+            '/measurement-types/${widget.type!['_id']}', body);
     if (mounted) {
       showSnack(context,
           res['success'] == true ? 'Saved successfully!' : res['message'],
@@ -721,34 +679,38 @@ class _ExpenseCategoryFormPanelState
       );
 
   Widget _activeToggle() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF7F9F8),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFFDDE3E0)),
-    ),
-    child: Row(children: [
-      Icon(Icons.toggle_on_outlined, size: 18, color: _accent),
-      const SizedBox(width: 12),
-      const Expanded(
-        child: Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
-      ),
-      Text(
-        _isActive ? 'Active' : 'Inactive',
-        style: TextStyle(
-          fontSize: 13, fontWeight: FontWeight.w500,
-          color: _isActive ? const Color(0xFF16A34A) : const Color(0xFF6B7280),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9F8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFDDE3E0)),
         ),
-      ),
-      const SizedBox(width: 8),
-      Switch.adaptive(
-        value: _isActive,
-        onChanged: (v) => setState(() => _isActive = v),
-        activeThumbColor: const Color(0xFF16A34A),
-        activeTrackColor: const Color(0xFFBBF7D0),
-      ),
-    ]),
-  );
+        child: Row(children: [
+          const Icon(Icons.toggle_on_outlined, size: 18, color: _accent),
+          const SizedBox(width: 12),
+          const Expanded(
+            child:
+                Text('Status', style: TextStyle(fontSize: 13, color: Colors.grey)),
+          ),
+          Text(
+            _isActive ? 'Active' : 'Inactive',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: _isActive
+                  ? const Color(0xFF16A34A)
+                  : const Color(0xFF6B7280),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch.adaptive(
+            value: _isActive,
+            onChanged: (v) => setState(() => _isActive = v),
+            activeThumbColor: const Color(0xFF16A34A),
+            activeTrackColor: const Color(0xFFBBF7D0),
+          ),
+        ]),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -766,7 +728,7 @@ class _ExpenseCategoryFormPanelState
             left: 20,
             right: 8),
         child: Row(children: [
-          const Icon(Icons.receipt_long_outlined,
+          const Icon(Icons.straighten_rounded,
               color: Colors.white70, size: 22),
           const SizedBox(width: 10),
           Expanded(
@@ -774,9 +736,7 @@ class _ExpenseCategoryFormPanelState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
               Text(
-                  _isEdit
-                      ? 'Edit Expense Category'
-                      : 'Add Expense Category',
+                  _isEdit ? 'Edit Measurement Type' : 'Add Measurement Type',
                   style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
@@ -784,10 +744,9 @@ class _ExpenseCategoryFormPanelState
               const SizedBox(height: 2),
               Text(
                 _isEdit
-                    ? 'Update category information'
-                    : 'Fill in details to create a category',
-                style:
-                    const TextStyle(color: Colors.white70, fontSize: 11),
+                    ? 'Update type information'
+                    : 'Fill in details to create a type',
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
               ),
             ]),
           ),
@@ -802,18 +761,17 @@ class _ExpenseCategoryFormPanelState
           child: ListView(padding: const EdgeInsets.all(20), children: [
             TextFormField(
               controller: _nameCtrl,
-              decoration: _dec(
-                  'Category Name', Icons.receipt_long_outlined,
-                  hint: 'e.g. Labour, Fuel, Maintenance'),
+              decoration: _dec('Type Name', Icons.straighten_rounded,
+                  hint: 'e.g. Ceiling, Wall, Floor, Column'),
               validator: (v) =>
-                  v!.trim().isEmpty ? 'Category name is required' : null,
+                  v!.trim().isEmpty ? 'Type name is required' : null,
             ),
             const SizedBox(height: 14),
             TextFormField(
               controller: _descCtrl,
               maxLines: 3,
-              decoration: _dec('Description', Icons.notes_rounded,
-                  hint: 'Optional'),
+              decoration:
+                  _dec('Description', Icons.notes_rounded, hint: 'Optional'),
             ),
             const SizedBox(height: 14),
             _activeToggle(),
@@ -829,8 +787,7 @@ class _ExpenseCategoryFormPanelState
                         borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text('Cancel',
-                      style:
-                          TextStyle(color: Colors.grey, fontSize: 14)),
+                      style: TextStyle(color: Colors.grey, fontSize: 14)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -859,7 +816,7 @@ class _ExpenseCategoryFormPanelState
                     child: _saving
                         ? const ButtonLoader()
                         : Text(
-                            _isEdit ? 'Save Changes' : 'Add Category',
+                            _isEdit ? 'Save Changes' : 'Add Type',
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
