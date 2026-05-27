@@ -237,17 +237,17 @@ class MeasurementPdf {
   static pw.Widget _rowsTable(
       List rows, pw.Font fontRegular, pw.Font fontBold) {
     const hdrs = [
-      '#', 'Meas. Type', 'Length', 'Width',
-      'Nos', 'Total', 'Beam No.', 'Room / Desc'
+      '#', 'Length', 'Width', 'Nos', 'Total',
+      'Beam No.', 'Meas. Type', 'Room / Desc'
     ];
     const colW = {
       0: pw.FixedColumnWidth(18),
-      1: pw.FlexColumnWidth(2.2),
+      1: pw.FlexColumnWidth(1.5),
       2: pw.FlexColumnWidth(1.5),
-      3: pw.FlexColumnWidth(1.5),
-      4: pw.FlexColumnWidth(0.8),
-      5: pw.FlexColumnWidth(1.2),
-      6: pw.FlexColumnWidth(1.4),
+      3: pw.FlexColumnWidth(0.8),
+      4: pw.FlexColumnWidth(1.2),
+      5: pw.FlexColumnWidth(1.4),
+      6: pw.FlexColumnWidth(2.2),
       7: pw.FlexColumnWidth(2.0),
     };
 
@@ -313,10 +313,6 @@ class MeasurementPdf {
                   cell('${i + 1}',
                       style: cellStyle(color: _grey),
                       align: pw.Alignment.center),
-                  cell(typeLabel,
-                      style: cellStyle(
-                          bold: !isOpen,
-                          color: isOpen ? _red : _blue)),
                   cell(_fmtFtIn(r['lFt'] ?? 0, r['lIn'] ?? 0)),
                   cell(_fmtFtIn(r['dFt'] ?? 0, r['dIn'] ?? 0)),
                   cell('${r['nos'] ?? 1}'),
@@ -324,7 +320,12 @@ class MeasurementPdf {
                       style: cellStyle(
                           bold: true,
                           color: isOpen ? _red : _green)),
-                  cell((r['beamNo'] ?? '') as String),
+                  cell((r['beamNo'] ?? '') as String,
+                      style: cellStyle(bold: true, color: _blue)),
+                  cell(typeLabel,
+                      style: cellStyle(
+                          bold: !isOpen,
+                          color: isOpen ? _red : _blue)),
                   cell((r['room'] ?? '') as String,
                       style: cellStyle(color: _grey)),
                 ],

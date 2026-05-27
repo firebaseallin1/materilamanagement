@@ -834,7 +834,10 @@ class _PaymentScreenState extends State<PaymentScreen>
     }
     final Map<String, List> weeks = {};
     for (final item in _outgoing) {
-      final key = _weekKey(item['date'] as String?);
+      // Group by period start (for labor/transport/expense) so a payment
+      // entered this week for last week's period shows under last week.
+      final groupDate = (item['periodFrom'] as String?) ?? (item['date'] as String?);
+      final key = _weekKey(groupDate);
       weeks.putIfAbsent(key, () => []).add(item);
     }
     final sortedKeys = weeks.keys.toList()..sort((a, b) => b.compareTo(a));
@@ -1679,6 +1682,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   late DateTime _laborTo;
   final Set<String> _selectedEmpIds = {};
   final Map<String, double> _advDeduction = {};
+  double _laborPrevWeekOutstanding = 0.0;
   final _payableCtrl = TextEditingController();
 
   // Transport payment state
@@ -1859,10 +1863,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     return s + (_advDeduction[id] ?? 0.0);
   });
 
-  // Sum of unpaid wages carried over from all previous periods
-  double get _laborPrevOutstanding => _laborEmps
-      .where((e) => _selectedEmpIds.contains(e['_id'].toString()))
-      .fold(0.0, (s, e) => s + ((e['previousOutstanding'] ?? 0) as num).toDouble());
+  // Weekly outstanding from the previous payment record
+  double get _laborPrevOutstanding => _laborPrevWeekOutstanding;
 
   // This week's outstanding = (prev outstanding + this week earnings) − amount paid now
   double get _laborThisWeekOutstanding {
@@ -1872,7 +1874,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   }
 
   void _syncPayable() {
-    _payableCtrl.text = _laborTotalEarnings.toStringAsFixed(2);
+    _payableCtrl.text = (_laborPrevWeekOutstanding + _laborTotalEarnings).toStringAsFixed(2);
   }
 
   // ── Transport payment getters ─────────────────────────────────────────────
@@ -2136,15 +2138,24 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       _laborEmps = [];
       _selectedEmpIds.clear();
     });
-    final params = <String, String>{
+    final attendanceParams = <String, String>{
       if (_branchId != null) 'branch': _branchId!,
       'from': _laborFrom.toIso8601String(),
       'to': DateTime(_laborTo.year, _laborTo.month, _laborTo.day, 23, 59, 59)
           .toIso8601String(),
     };
-    final res = await ApiService.get('/attendance/summary', params: params);
+    final results = await Future.wait([
+      ApiService.get('/attendance/summary', params: attendanceParams),
+      ApiService.get('/payments', params: {
+        'category': 'labor',
+        'type': 'paid',
+        if (_branchId != null) 'branch': _branchId!,
+        'limit': '50',
+      }),
+    ]);
     if (!mounted) return;
 
+    final res = results[0];
     final list = (res['data'] as List? ?? [])
         .where((e) => (e['presentDays'] ?? 0) > 0 || (e['earnings'] ?? 0) > 0)
         .toList();
@@ -2165,9 +2176,30 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       return;
     }
 
+    // Find most recent labor payment before this period to get weekly outstanding.
+    // Use periodTo (when available) so a payment entered late (e.g. paid on 27 May
+    // for the 16–22 May period) is still treated as a previous-week payment.
+    final prevPayments = (results[1]['data'] as List? ?? [])
+        .where((p) {
+          final periodEnd = (p['periodTo'] as String?) ?? (p['date'] as String?);
+          if (periodEnd == null) return false;
+          final d = DateTime.parse(periodEnd);
+          return DateTime(d.year, d.month, d.day).isBefore(_laborFrom);
+        })
+        .toList()
+      ..sort((a, b) {
+        final da = DateTime.parse((a['periodTo'] as String?) ?? (a['date'] as String));
+        final db = DateTime.parse((b['periodTo'] as String?) ?? (b['date'] as String));
+        return db.compareTo(da);
+      });
+    final prevWeekOutstanding = prevPayments.isNotEmpty
+        ? ((prevPayments.first['thisWeekOutstanding'] ?? 0) as num).toDouble()
+        : 0.0;
+
     setState(() {
       _laborEmps = list;
       _laborLoading = false;
+      _laborPrevWeekOutstanding = prevWeekOutstanding;
       _selectedEmpIds.addAll(list.map((e) => e['_id'].toString()));
     });
     _syncPayable();
@@ -2276,7 +2308,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       return;
     }
 
-    // ── Labour batch payment ──────────────────────────────────────────────────
+    // ── Labour weekly payment (single combined record) ───────────────────────
     if (_isLaborMode) {
       final selected = _laborEmps
           .where((e) => _selectedEmpIds.contains(e['_id'].toString()))
@@ -2286,63 +2318,50 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         setState(() => _saving = false);
         return;
       }
-      final totalPayable =
-          double.tryParse(_payableCtrl.text) ?? _laborTotalEarnings;
-      final totalNet = selected.fold(0.0, (s, e) {
+      final totalPayable = double.tryParse(_payableCtrl.text) ??
+          (_laborPrevWeekOutstanding + _laborTotalEarnings);
+      final totalDays = selected.fold<int>(
+          0, (s, e) => s + ((e['presentDays'] ?? 0) as num).toInt());
+      final totalAdv = selected.fold<double>(0.0, (s, e) {
         final id = e['_id'].toString();
-        final earnings = ((e['earnings'] ?? 0) as num).toDouble();
-        final deduction = _advDeduction[id] ?? 0.0;
-        return s + (earnings - deduction).clamp(0.0, double.infinity);
+        return s + (_advDeduction[id] ?? 0.0);
       });
-      int ok = 0;
-      String? errMsg;
-      for (final emp in selected) {
-        final id = emp['_id'].toString();
-        final earnings = ((emp['earnings'] ?? 0) as num).toDouble();
-        final deduction = _advDeduction[id] ?? 0.0;
-        final net = (earnings - deduction).clamp(0.0, double.infinity);
-        final prevOutstanding =
-            ((emp['previousOutstanding'] ?? 0) as num).toDouble();
-        final perEmpPayable = totalNet > 0
-            ? (net / totalNet * totalPayable).clamp(0.0, net + prevOutstanding)
-            : net;
-        final outstanding = double.parse(
-            (prevOutstanding + net - perEmpPayable)
-                .clamp(0.0, double.infinity)
-                .toStringAsFixed(2));
-        final body = <String, dynamic>{
-          'employee': emp['_id'],
-          'branch': _branchId ?? emp['branch']?['_id'],
-          'partyName': emp['name'],
-          'amount': double.parse(perEmpPayable.toStringAsFixed(2)),
-          'paymentMode': _mode,
-          'type': 'paid',
-          'category': 'labor',
-          'date': _date.toIso8601String(),
-          'referenceNo': _refCtrl.text.trim(),
-          'description': _descCtrl.text.trim(),
-          'advanceAdjustment': deduction,
-          'periodFrom': _laborFrom.toIso8601String(),
-          'periodTo': _laborTo.toIso8601String(),
-          'earnings': earnings,
-          'presentDays': (emp['presentDays'] ?? 0) as num,
-          'previousOutstanding': prevOutstanding,
-          'thisWeekOutstanding': outstanding,
-        };
-        final res = await ApiService.post('/payments', body);
-        if (res['success'] == true)
-          ok++;
-        else
-          errMsg ??= res['message'];
-      }
+      final thisWeekOutstanding = double.parse(
+          (_laborPrevWeekOutstanding + _laborTotalEarnings - totalPayable)
+              .clamp(0.0, double.infinity)
+              .toStringAsFixed(2));
+      final body = <String, dynamic>{
+        'branch': _branchId ??
+            (selected.first['branch'] is Map
+                ? selected.first['branch']['_id']
+                : null),
+        'partyName':
+            'Labor Payment (${selected.length} employee${selected.length == 1 ? '' : 's'})',
+        'amount': double.parse(totalPayable.toStringAsFixed(2)),
+        'paymentMode': _mode,
+        'type': 'paid',
+        'category': 'labor',
+        'date': _date.toIso8601String(),
+        'referenceNo': _refCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'periodFrom': _laborFrom.toIso8601String(),
+        'periodTo': _laborTo.toIso8601String(),
+        'earnings': double.parse(_laborTotalEarnings.toStringAsFixed(2)),
+        'presentDays': totalDays,
+        'advanceAdjustment': double.parse(totalAdv.toStringAsFixed(2)),
+        'previousOutstanding':
+            double.parse(_laborPrevWeekOutstanding.toStringAsFixed(2)),
+        'thisWeekOutstanding': thisWeekOutstanding,
+      };
+      final res = await ApiService.post('/payments', body);
       if (mounted) {
         setState(() => _saving = false);
-        if (ok > 0) {
+        if (res['success'] == true) {
           showSnack(context,
-              'Payment recorded for $ok employee${ok == 1 ? '' : 's'}');
+              'Payment recorded for ${selected.length} employee${selected.length == 1 ? '' : 's'}');
           widget.onSaved();
         } else {
-          showSnack(context, errMsg ?? 'Save failed', error: true);
+          showSnack(context, res['message'] ?? 'Save failed', error: true);
         }
       }
       return;
