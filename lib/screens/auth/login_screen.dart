@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../constants/company_info.dart';
 
 const _kPrimary = Color(0xFF1B3A27);
 const _kAccent = Color(0xFF2E7D52);
@@ -119,24 +120,29 @@ class _LoginScreenState extends State<LoginScreen>
                 opacity: _fade,
                 child: Column(children: [
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.13),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.grid_view_rounded,
-                        color: Colors.white, size: 30),
+                    child: Image.asset(
+                      CompanyInfo.logoAsset,
+                      width: 40, height: 40,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.grid_view_rounded, color: Colors.white, size: 30),
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  const Text('MMS',
-                      style: TextStyle(
+                  Text(CompanyInfo.name,
+                      style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 26,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 2)),
+                          letterSpacing: 1.5)),
                   const SizedBox(height: 4),
-                  const Text('Material Management System',
-                      style: TextStyle(color: Colors.white60, fontSize: 13)),
+                  Text(CompanyInfo.tagline,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white60, fontSize: 12)),
                 ]),
               ),
               const SizedBox(height: 28),
@@ -176,24 +182,28 @@ class _LoginScreenState extends State<LoginScreen>
             // Card header
             Row(children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: _kAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.grid_view_rounded,
-                    color: _kAccent, size: 22),
+                child: Image.asset(
+                  CompanyInfo.logoAsset,
+                  width: 28, height: 28,
+                  errorBuilder: (_, __, ___) => const Icon(
+                      Icons.grid_view_rounded, color: _kAccent, size: 22),
+                ),
               ),
               const SizedBox(width: 12),
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('MMS',
-                      style: TextStyle(
-                          fontSize: 18,
+                  Text(CompanyInfo.name,
+                      style: const TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1A1A2E))),
-                  Text('Sign in to your account',
+                  const Text('Sign in to your account',
                       style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
@@ -353,19 +363,23 @@ class _BrandPanel extends StatelessWidget {
                 // Brand mark
                 Row(children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.grid_view_rounded,
-                        color: Colors.white, size: 26),
+                    child: Image.asset(
+                      CompanyInfo.logoAsset,
+                      width: 36, height: 36,
+                      errorBuilder: (_, __, ___) => const Icon(
+                          Icons.grid_view_rounded, color: Colors.white, size: 26),
+                    ),
                   ),
                   const SizedBox(width: 14),
-                  const Text('MMS',
-                      style: TextStyle(
+                  Text(CompanyInfo.name,
+                      style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 22,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.5)),
                 ]),

@@ -76,6 +76,7 @@ class _EmployeeScreenState extends State<EmployeeScreen> {
   }
 
   void _openForm([Map? emp]) {
+    final isAdmin = context.read<AuthService>().isAdmin;
     final sw = MediaQuery.of(context).size.width;
     final panelWidth = sw > 900 ? sw * 0.38 : sw * 0.92;
     showGeneralDialog(
@@ -91,7 +92,7 @@ class _EmployeeScreenState extends State<EmployeeScreen> {
           child: SizedBox(
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
-            child: _EmployeeFormPanel(employee: emp, onSaved: _load),
+            child: _EmployeeFormPanel(employee: emp, onSaved: _load, isAdmin: isAdmin),
           ),
         ),
       ),
@@ -575,7 +576,8 @@ class _StatusChip extends StatelessWidget {
 class _EmployeeFormPanel extends StatefulWidget {
   final Map? employee;
   final VoidCallback onSaved;
-  const _EmployeeFormPanel({this.employee, required this.onSaved});
+  final bool isAdmin;
+  const _EmployeeFormPanel({this.employee, required this.onSaved, this.isAdmin = false});
 
   @override
   State<_EmployeeFormPanel> createState() => _EmployeeFormPanelState();
@@ -1041,7 +1043,7 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
                 const SizedBox(height: 14),
                 _field(_hourRate, 'Hour Rate (₹)', Icons.access_time_outlined,
                     hint: 'Optional', type: TextInputType.numberWithOptions(decimal: true),
-                    readOnly: true),
+                    readOnly: !widget.isAdmin),
                 const SizedBox(height: 14),
 
                 // Branch dropdown

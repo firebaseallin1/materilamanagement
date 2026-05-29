@@ -22,6 +22,7 @@ import '../masters/user_screen.dart';
 import '../masters/employee_screen.dart';
 import '../transactions/outstanding_screen.dart';
 import '../reports/reports_screen.dart';
+import '../../constants/company_info.dart';
 
 const _kSidebar = Color(0xFF1B3A27);
 const _kSidebarActive = Color(0xFF2E7D52);
@@ -159,7 +160,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     final auth = context.read<AuthService>();
     return AppBar(
       backgroundColor: _kSidebar,
-      title: const Text('MMS',
+      title: const Text(CompanyInfo.name,
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       iconTheme: const IconThemeData(color: Colors.white),
       actions: [
@@ -1337,14 +1338,22 @@ class _SidebarContent extends StatelessWidget {
               decoration: BoxDecoration(
                   color: _kSidebarActive,
                   borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.grid_view_rounded,
-                  color: Colors.white, size: 20),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  CompanyInfo.logoAsset,
+                  width: 36, height: 36,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                      Icons.grid_view_rounded, color: Colors.white, size: 20),
+                ),
+              ),
             ),
             const SizedBox(width: 10),
-            const Text('MMS',
+            const Text(CompanyInfo.name,
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold)),
           ]),
         ),
