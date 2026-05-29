@@ -50,6 +50,17 @@ class AuthService extends ChangeNotifier {
   String get userName => currentUser?['name'] ?? 'User';
   String get userRole => currentUser?['role'] ?? 'user';
 
+  // IDs of employees linked to this user account
+  List<String> get linkedEmployeeIds {
+    final emps = currentUser?['employees'];
+    if (emps is! List) return [];
+    return emps.map((e) {
+      if (e is Map) return e['_id']?.toString() ?? '';
+      if (e is String) return e;
+      return '';
+    }).where((id) => id.isNotEmpty).toList();
+  }
+
   List<String> get allowedScreens {
     if (isAdmin) return const [];  // admin bypasses checks
     final perms = currentUser?['userCategory']?['permissions'];

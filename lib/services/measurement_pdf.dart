@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import '../constants/company_info.dart';
 
 class MeasurementPdf {
   // ── Colours ──────────────────────────────────────────────────────────────
@@ -9,7 +12,6 @@ class MeasurementPdf {
   static final _green      = PdfColor.fromHex('16A34A');
   static final _greenLight = PdfColor.fromHex('DCFCE7');
   static final _blue       = PdfColor.fromHex('2E7D52');
-  static final _orange     = PdfColor.fromHex('EA580C');
   static final _red        = PdfColor.fromHex('DC2626');
   static final _redLight   = PdfColor.fromHex('FFF5F5');
   static final _grey       = PdfColor.fromHex('6B7280');
@@ -25,6 +27,13 @@ class MeasurementPdf {
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold    = await PdfGoogleFonts.notoSansBold();
     final theme = pw.ThemeData.withFont(base: fontRegular, bold: fontBold);
+
+    // Try to load company logo
+    pw.ImageProvider? logoImg;
+    try {
+      final ByteData data = await rootBundle.load(CompanyInfo.logoAsset);
+      logoImg = pw.MemoryImage(data.buffer.asUint8List());
+    } catch (_) {}
 
     final pdf = pw.Document();
 
@@ -69,7 +78,7 @@ class MeasurementPdf {
         margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 40),
         theme: theme,
         maxPages: 500,
-        header: (ctx) => _pageHeader(location, date, dcNo, fontBold, fontRegular),
+        header: (ctx) => _pageHeader(location, date, dcNo, fontBold, fontRegular, logoImg),
         footer: (ctx) => _pageFooter(ctx, fontRegular),
         build: (_) => [
           pw.SizedBox(height: 14),
@@ -99,31 +108,38 @@ class MeasurementPdf {
 
   // ── Page header ───────────────────────────────────────────────────────────
   static pw.Widget _pageHeader(String location, String date, String dcNo,
-      pw.Font fontBold, pw.Font fontRegular) {
+      pw.Font fontBold, pw.Font fontRegular, pw.ImageProvider? logoImg) {
     return pw.Column(children: [
       pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text('MMS',
-                style: pw.TextStyle(
-                    font: fontBold,
-                    fontSize: 22,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _darkGreen)),
-            pw.Text('Material Management System',
-                style: pw.TextStyle(
-                    font: fontRegular, fontSize: 8, color: _greyLight)),
+          // Left: logo + company name + address
+          pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+            if (logoImg != null) ...[
+              pw.Image(logoImg, width: 40, height: 40),
+              pw.SizedBox(width: 8),
+            ],
+            pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text(CompanyInfo.name,
+                  style: pw.TextStyle(
+                      font: fontBold, fontSize: 14,
+                      fontWeight: pw.FontWeight.bold, color: _darkGreen)),
+              pw.Text(CompanyInfo.address,
+                  style: pw.TextStyle(
+                      font: fontRegular, fontSize: 7.5, color: _grey)),
+              pw.Text(CompanyInfo.phone,
+                  style: pw.TextStyle(
+                      font: fontRegular, fontSize: 7.5, color: _grey)),
+            ]),
           ]),
+          // Right: report type + date + dc no
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
             pw.Text('MEASUREMENT REPORT',
                 style: pw.TextStyle(
-                    font: fontBold,
-                    fontSize: 12,
+                    font: fontBold, fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
-                    color: _darkGreen,
-                    letterSpacing: 0.6)),
+                    color: _darkGreen, letterSpacing: 0.5)),
             pw.SizedBox(height: 3),
             pw.Text(date,
                 style: pw.TextStyle(
@@ -132,10 +148,8 @@ class MeasurementPdf {
               pw.SizedBox(height: 2),
               pw.Text('DC No: $dcNo',
                   style: pw.TextStyle(
-                      font: fontBold,
-                      fontSize: 9,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _darkGreen)),
+                      font: fontBold, fontSize: 9,
+                      fontWeight: pw.FontWeight.bold, color: _darkGreen)),
             ],
           ]),
         ],

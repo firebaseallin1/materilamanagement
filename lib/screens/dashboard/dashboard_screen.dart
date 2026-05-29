@@ -1421,7 +1421,7 @@ class _SidebarContent extends StatelessWidget {
               ],
               if (auth.canAccess('reports')) ...[
                 _sectionLabel('REPORTS'),
-                _navItem(9, Icons.bar_chart_outlined, 'Overall Report', null),
+                _navItem(9, Icons.bar_chart_outlined, 'Mesr vs Payments', null),
               ],
             ],
           ),

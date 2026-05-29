@@ -1051,7 +1051,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
 
   String? _branchId;
   String? _userCategoryId;
-  String? _employeeId;
+  final Set<String> _employeeIds = {};
   bool _saving = false;
   bool _isActive = true;
   bool _obscurePass = true;
@@ -1090,7 +1090,295 @@ class _UserFormPanelState extends State<UserFormPanel> {
           if (match != null) _userCategoryId = match['_id'];
         }
       }
+      final rawList = widget.user!['employees'];
+      if (rawList is List) {
+        for (final e in rawList) {
+          final id = e is Map ? e['_id'] as String? : (e is String ? e : null);
+          if (id != null && id.isNotEmpty) _employeeIds.add(id);
+        }
+      }
     }
+    _loadEmployees();
+  }
+
+  Future<void> _loadEmployees() async {
+    final res = await ApiService.get('/employees', params: {'limit': '1000', 'isActive': 'true'});
+    if (mounted) {
+      setState(() => _employees = res['data'] ?? []);
+    }
+  }
+
+  void _openEmployeePicker() {
+    String search = '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) {
+          final filtered = _employees.where((e) {
+            if (search.isEmpty) return true;
+            final q = search.toLowerCase();
+            return (e['name'] ?? '').toString().toLowerCase().contains(q) ||
+                (e['empCode'] ?? '').toString().toLowerCase().contains(q);
+          }).toList();
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            maxChildSize: 0.95,
+            minChildSize: 0.4,
+            expand: false,
+            builder: (_, sc) => Column(children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                    color: const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Row(children: [
+                  const Text('Select Employees',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  if (_employeeIds.isNotEmpty)
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _employeeIds.clear());
+                        setModal(() {});
+                      },
+                      child: const Text('Clear all',
+                          style: TextStyle(fontSize: 12, color: Color(0xFFDC2626))),
+                    ),
+                ]),
+              ),
+              // Search
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: TextField(
+                  autofocus: false,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or code…',
+                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF9CA3AF)),
+                    filled: true,
+                    fillColor: const Color(0xFFF3F4F6),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none),
+                  ),
+                  onChanged: (v) => setModal(() => search = v),
+                ),
+              ),
+              const Divider(height: 1),
+              // Employee list
+              Expanded(
+                child: ListView.separated(
+                  controller: sc,
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                  itemBuilder: (_, i) {
+                    final emp = filtered[i];
+                    final id = emp['_id'] as String;
+                    final selected = _employeeIds.contains(id);
+                    final photo = emp['photo'] as String?;
+                    Uint8List? bytes;
+                    if (photo != null && photo.isNotEmpty) {
+                      try { bytes = base64Decode(photo); } catch (_) {}
+                    }
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          if (selected) _employeeIds.remove(id);
+                          else _employeeIds.add(id);
+                        });
+                        setModal(() {});
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(children: [
+                          // Avatar
+                          bytes != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(bytes, width: 36, height: 36, fit: BoxFit.cover))
+                              : Container(
+                                  width: 36, height: 36,
+                                  decoration: BoxDecoration(
+                                    color: _accent.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.person_outline_rounded,
+                                      size: 18, color: _accent),
+                                ),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(emp['name'] ?? '—',
+                                  style: const TextStyle(
+                                      fontSize: 13, fontWeight: FontWeight.w600,
+                                      color: Color(0xFF111827))),
+                              Text(
+                                '${emp['empCode'] ?? ''}${(emp['empCode'] ?? '').isNotEmpty && (emp['designation'] ?? '').isNotEmpty ? ' · ' : ''}${emp['designation'] ?? ''}',
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                              ),
+                            ],
+                          )),
+                          Checkbox(
+                            value: selected,
+                            onChanged: (_) {
+                              setState(() {
+                                if (selected) _employeeIds.remove(id);
+                                else _employeeIds.add(id);
+                              });
+                              setModal(() {});
+                            },
+                            activeColor: _accent,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4)),
+                          ),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // Done button
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(
+                        _employeeIds.isEmpty
+                            ? 'Done'
+                            : 'Done  (${_employeeIds.length} selected)',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _employeeMultiSelect() {
+    final selected = _employees
+        .where((e) => _employeeIds.contains(e['_id'] as String))
+        .toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Tap-to-open button
+      GestureDetector(
+        onTap: _openEmployeePicker,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            color: _employeeIds.isEmpty
+                ? const Color(0xFFF7F9F8)
+                : _accent.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _employeeIds.isEmpty
+                  ? const Color(0xFFDDE3E0)
+                  : _accent.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(children: [
+            Icon(Icons.badge_outlined, size: 18,
+                color: _employeeIds.isEmpty ? Colors.grey : _accent),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _employeeIds.isEmpty
+                    ? 'Select employees (optional)'
+                    : '${_employeeIds.length} employee${_employeeIds.length == 1 ? '' : 's'} selected',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _employeeIds.isEmpty
+                      ? const Color(0xFF9CA3AF)
+                      : _accent,
+                  fontWeight: _employeeIds.isEmpty
+                      ? FontWeight.normal
+                      : FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(Icons.expand_more_rounded, size: 18,
+                color: _employeeIds.isEmpty ? Colors.grey : _accent),
+          ]),
+        ),
+      ),
+      // Selected employee chips
+      if (selected.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: selected.map((emp) {
+            final id = emp['_id'] as String;
+            final photo = emp['photo'] as String?;
+            Uint8List? bytes;
+            if (photo != null && photo.isNotEmpty) {
+              try { bytes = base64Decode(photo); } catch (_) {}
+            }
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: _accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _accent.withValues(alpha: 0.3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                bytes != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(bytes, width: 20, height: 20, fit: BoxFit.cover))
+                    : Container(
+                        width: 20, height: 20,
+                        decoration: BoxDecoration(
+                            color: _accent.withValues(alpha: 0.2),
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.person_outline_rounded,
+                            size: 12, color: _accent),
+                      ),
+                const SizedBox(width: 6),
+                Text(emp['name'] ?? '',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w500,
+                        color: Color(0xFF166534))),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => setState(() => _employeeIds.remove(id)),
+                  child: const Icon(Icons.close_rounded,
+                      size: 14, color: Color(0xFF6B7280)),
+                ),
+              ]),
+            );
+          }).toList(),
+        ),
+      ],
+    ]);
   }
 
   @override
@@ -1231,6 +1519,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
       'role': role,
       'isActive': _isActive,
       'photo': _photoBase64 ?? '',
+      'employees': _employeeIds.toList(),
       if (_passCtrl.text.isNotEmpty) 'password': _passCtrl.text,
     };
 
@@ -1585,6 +1874,10 @@ class _UserFormPanelState extends State<UserFormPanel> {
                   .toList(),
               onChanged: (v) => setState(() => _branchId = v),
             ),
+            const SizedBox(height: 14),
+
+            // Linked Employees (multi-select, optional)
+            _employeeMultiSelect(),
             const SizedBox(height: 14),
 
             _activeToggle(),

@@ -21,5 +21,5 @@ const kAllScreens = [
   ScreenDef('materials',   'Material',          'Masters'),
   ScreenDef('employees',   'Employees',         'Masters'),
   ScreenDef('users',       'Users',             'Admin'),
-  ScreenDef('reports',     'Overall Report',    'Reports'),
+  ScreenDef('reports',     'Mesr vs Payments',  'Reports'),
 ];

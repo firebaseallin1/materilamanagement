@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/company_info.dart';
 import '../services/auth_service.dart';
 
 class ScreenHeader extends StatelessWidget {
@@ -167,6 +168,12 @@ class ScreenHeader extends StatelessWidget {
                   _AddButton(label: addLabel ?? 'Add', onTap: onAdd!),
                   const SizedBox(width: 14),
                 ],
+                // Company logo + name
+                _CompanyBadge(),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: SizedBox(height: 28, child: VerticalDivider()),
+                ),
                 _HeaderIconBtn(
                     icon: Icons.mail_outline_rounded, onTap: () {}),
                 const SizedBox(width: 6),
@@ -294,6 +301,40 @@ class _HeaderIconBtn extends StatelessWidget {
         child: Icon(icon, size: 18, color: Colors.grey.shade600),
       ),
     );
+  }
+}
+
+class _CompanyBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.asset(
+          CompanyInfo.logoAsset,
+          width: 32, height: 32, fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B3A27),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Center(
+              child: Text('M', style: TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 7),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
+        Text(CompanyInfo.name,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
+                color: Color(0xFF1B3A27))),
+        Text('Built on Trust',
+            style: TextStyle(fontSize: 9, color: Color(0xFF6B7280))),
+      ]),
+    ]);
   }
 }
 

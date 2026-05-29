@@ -54,13 +54,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
   Future<void> _loadDropdownData() async {
+    final auth = context.read<AuthService>();
     final results = await Future.wait([
       ApiService.get('/branches'),
-      ApiService.get('/employees'),
+      ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
     ]);
     if (mounted) setState(() {
       _branches = results[0]['data'] ?? [];
-      _employees = results[1]['data'] ?? [];
+      final all = List.from(results[1]['data'] ?? []);
+      if (auth.isAdmin) {
+        _employees = all; // all active employees
+      } else {
+        final linked = auth.linkedEmployeeIds;
+        _employees = all.where((e) => linked.contains(e['_id']?.toString())).toList();
+      }
     });
   }
 
@@ -115,10 +122,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   // ── Computed ───────────────────────────────────────────────────────────────
 
   List get _filtered {
-    if (_search.isEmpty) return _items;
-    final q = _search.toLowerCase();
-    return _items.where((i) =>
-      (i['employee']?['name'] ?? '').toString().toLowerCase().contains(q)).toList();
+    final auth = context.read<AuthService>();
+    final linkedIds = auth.isAdmin ? <String>[] : auth.linkedEmployeeIds;
+    var list = _items.where((i) {
+      if (!auth.isAdmin && linkedIds.isNotEmpty) {
+        final empId = i['employee'] is Map
+            ? i['employee']['_id']?.toString()
+            : i['employee']?.toString();
+        if (!linkedIds.contains(empId)) return false;
+      }
+      if (_search.isEmpty) return true;
+      final q = _search.toLowerCase();
+      return (i['employee']?['name'] ?? '').toString().toLowerCase().contains(q);
+    }).toList();
+    return list;
   }
 
   int get _activeFilterCount {
@@ -769,8 +786,28 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
   }
 
   Future<void> _loadDropdowns() async {
-    final results = await Future.wait([ApiService.get('/employees'), ApiService.get('/branches')]);
-    if (mounted) setState(() { _employees = results[0]['data'] ?? []; _branches = results[1]['data'] ?? []; });
+    final auth = context.read<AuthService>();
+    final results = await Future.wait([
+      ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/branches'),
+    ]);
+    if (!mounted) return;
+    final allEmps = List.from(results[0]['data'] ?? []);
+    final filtered = auth.isAdmin
+        ? allEmps // admin → all active employees
+        : allEmps.where((e) => auth.linkedEmployeeIds.contains(e['_id']?.toString())).toList();
+    setState(() {
+      _employees = filtered;
+      _branches = results[1]['data'] ?? [];
+      // Auto-select & fill rate when only one linked employee
+      if (!auth.isAdmin && filtered.length == 1 && _employeeId == null) {
+        _employeeId = filtered[0]['_id'] as String?;
+        final rate = filtered[0]['hourRate'];
+        if (rate != null && rate != 0 && _hourRateCtrl.text.isEmpty) {
+          _hourRateCtrl.text = rate.toString();
+        }
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -897,7 +934,17 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                         style: TextStyle(color: active ? null : Colors.grey)),
                   );
                 }).toList(),
-                onChanged: (v) => setState(() => _employeeId = v),
+                onChanged: (v) {
+                  setState(() => _employeeId = v);
+                  if (v != null) {
+                    final emp = _employees.firstWhere(
+                        (e) => e['_id'] == v, orElse: () => <String, dynamic>{});
+                    final rate = emp['hourRate'];
+                    if (rate != null && rate != 0) {
+                      _hourRateCtrl.text = rate.toString();
+                    }
+                  }
+                },
                 validator: (v) => v == null ? 'Required' : null,
                 isExpanded: true,
               ),
@@ -924,15 +971,11 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
               const SizedBox(height: 14),
               TextFormField(
                 controller: _hourRateCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-                decoration: _dec('Rate per Hour (₹)', Icons.currency_rupee_rounded, hint: '0.00'),
-                onChanged: (_) => setState(() {}),
-                validator: (v) {
-                  final n = double.tryParse(v?.trim() ?? '');
-                  if (n == null || n < 0) return 'Enter a valid rate';
-                  return null;
-                },
+                readOnly: true,
+                style: const TextStyle(color: Color(0xFF6B7280)),
+                decoration: _dec('Rate per Hour (₹)', Icons.currency_rupee_rounded).copyWith(
+                  fillColor: const Color(0xFFF3F4F6),
+                ),
               ),
               const SizedBox(height: 14),
               _switchRow(

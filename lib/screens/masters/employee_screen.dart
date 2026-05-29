@@ -324,6 +324,7 @@ class _DesktopTable extends StatelessWidget {
               _colH('Designation', flex: 3),
               _colH('Branch', flex: 3),
               _colH('Phone', flex: 3),
+              _colH('Rate/Hr', flex: 2),
               if (isAdmin) _colH('Created By', flex: 3),
               _colH('Status', flex: 2),
               const SizedBox(width: 36),
@@ -333,16 +334,13 @@ class _DesktopTable extends StatelessWidget {
           // Data rows
           ...List.generate(employees.length, (i) {
             final emp = employees[i];
-            final isLast = i == employees.length - 1;
             final isActive = emp['isActive'] ?? true;
             final branch = emp['branch'];
             final createdBy = emp['createdBy'];
             return Column(children: [
-              InkWell(
-                onTap: () => onEdit(emp),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Row(children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(children: [
                     // Name + avatar
                     Expanded(
                       flex: 4,
@@ -375,6 +373,13 @@ class _DesktopTable extends StatelessWidget {
                     Expanded(flex: 3,
                       child: Text(emp['phone'] ?? '—',
                           style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)))),
+                    // Hour Rate
+                    Expanded(flex: 2,
+                      child: Text(
+                          (emp['hourRate'] != null && emp['hourRate'] != 0)
+                              ? '₹${emp['hourRate']}'
+                              : '—',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600))),
                     // Created By (admin only)
                     if (isAdmin)
                       Expanded(flex: 3,
@@ -385,26 +390,22 @@ class _DesktopTable extends StatelessWidget {
                     // Status
                     Expanded(flex: 2, child: _StatusChip(isActive: isActive)),
                     // Actions
-                    SizedBox(
-                      width: 36,
-                      child: PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_horiz_rounded, size: 18, color: Colors.grey),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 3,
-                        onSelected: (v) {
-                          if (v == 'edit') onEdit(emp);
-                          if (v == 'delete') onDelete(emp['_id']);
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Edit')),
-                          PopupMenuItem(value: 'delete', child: Text('Deactivate', style: TextStyle(color: Colors.red))),
-                        ],
+                    InkWell(
+                      onTap: () => onEdit(emp),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 30, height: 30,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F9F4),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.edit_outlined,
+                            size: 16, color: Color(0xFF2E7D52)),
                       ),
                     ),
                   ]),
                 ),
-              ),
-              if (!isLast) const Divider(height: 1, color: Color(0xFFF3F4F6)),
+              if (i < employees.length - 1) const Divider(height: 1, color: Color(0xFFF3F4F6)),
             ]);
           }),
         ]),
@@ -469,23 +470,26 @@ class _MobileList extends StatelessWidget {
               Text(emp['designation'] ?? '', style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
               if (branch is Map && (branch['name'] ?? '').isNotEmpty)
                 Text(branch['name'], style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              if (emp['hourRate'] != null && emp['hourRate'] != 0)
+                Text('Rate: ₹${emp['hourRate']}/hr',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600)),
               if (isAdmin && createdBy is Map)
                 Text('By: ${createdBy['name'] ?? createdBy['userId'] ?? ''}',
                     style: const TextStyle(fontSize: 11, color: Colors.grey)),
             ]),
-            trailing: PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              onSelected: (v) {
-                if (v == 'edit') onEdit(emp);
-                if (v == 'delete') onDelete(emp['_id']);
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'edit', child: Text('Edit')),
-                PopupMenuItem(value: 'delete', child: Text('Deactivate', style: TextStyle(color: Colors.red))),
-              ],
+            trailing: InkWell(
+              onTap: () => onEdit(emp),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F9F4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.edit_outlined,
+                    size: 17, color: Color(0xFF2E7D52)),
+              ),
             ),
-            onTap: () => onEdit(emp),
           ),
         );
       },
@@ -584,16 +588,20 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
   List _branches = [];
 
   late final TextEditingController _name;
-  late final TextEditingController _empCode;
   late final TextEditingController _designation;
   late final TextEditingController _department;
   late final TextEditingController _phone;
   late final TextEditingController _email;
   late final TextEditingController _address;
+  late final TextEditingController _hourRate;
+  late final TextEditingController _aadharNo;
+  late final TextEditingController _panNo;
   String? _branchId;
   DateTime? _joiningDate;
   bool _isActive = true;
   String? _photoBase64;
+  String? _aadharPhotoBase64;
+  String? _panPhotoBase64;
 
   bool get _isEdit => widget.employee != null;
 
@@ -605,15 +613,22 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
     super.initState();
     final emp = widget.employee;
     _name = TextEditingController(text: emp?['name'] ?? '');
-    _empCode = TextEditingController(text: emp?['empCode'] ?? '');
     _designation = TextEditingController(text: emp?['designation'] ?? '');
     _department = TextEditingController(text: emp?['department'] ?? '');
     _phone = TextEditingController(text: emp?['phone'] ?? '');
     _email = TextEditingController(text: emp?['email'] ?? '');
     _address = TextEditingController(text: emp?['address'] ?? '');
+    _hourRate = TextEditingController(
+        text: emp?['hourRate'] != null ? emp!['hourRate'].toString() : '');
+    _aadharNo = TextEditingController(text: emp?['aadharNo'] ?? '');
+    _panNo = TextEditingController(text: emp?['panNo'] ?? '');
     _isActive = emp?['isActive'] ?? true;
     final rawPhoto = emp?['photo'] as String?;
     _photoBase64 = (rawPhoto != null && rawPhoto.isNotEmpty) ? rawPhoto : null;
+    final rawAadhar = emp?['aadharPhoto'] as String?;
+    _aadharPhotoBase64 = (rawAadhar != null && rawAadhar.isNotEmpty) ? rawAadhar : null;
+    final rawPan = emp?['panPhoto'] as String?;
+    _panPhotoBase64 = (rawPan != null && rawPan.isNotEmpty) ? rawPan : null;
 
     final branch = emp?['branch'];
     _branchId = branch is Map ? branch['_id'] : (branch is String ? branch : null);
@@ -629,12 +644,14 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
   @override
   void dispose() {
     _name.dispose();
-    _empCode.dispose();
     _designation.dispose();
     _department.dispose();
     _phone.dispose();
     _email.dispose();
     _address.dispose();
+    _hourRate.dispose();
+    _aadharNo.dispose();
+    _panNo.dispose();
     super.dispose();
   }
 
@@ -761,6 +778,132 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
     );
   }
 
+  Future<void> _pickDocumentPhoto(
+      String? current, void Function(String?) onResult) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('Choose Document Photo',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          ),
+          ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFDCFCE7),
+              child: Icon(Icons.photo_library_outlined, color: Color(0xFF16A34A), size: 20),
+            ),
+            title: const Text('Gallery',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFDEECFF),
+              child: Icon(Icons.camera_alt_outlined, color: Color(0xFF1D4ED8), size: 20),
+            ),
+            title: const Text('Camera',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+          if (current != null)
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFFEF2F2),
+                child: Icon(Icons.delete_outline_rounded,
+                    color: Color(0xFFDC2626), size: 20),
+              ),
+              title: const Text('Remove Photo',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+                      color: Color(0xFFDC2626))),
+              onTap: () {
+                onResult(null);
+                Navigator.pop(context);
+              },
+            ),
+          const SizedBox(height: 12),
+        ]),
+      ),
+    );
+    if (source == null) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+        source: source, maxWidth: 1000, maxHeight: 700, imageQuality: 80);
+    if (picked == null || !mounted) return;
+    final bytes = await picked.readAsBytes();
+    onResult(base64Encode(bytes));
+  }
+
+  Widget _docPhotoTile(
+      String label, IconData icon, Color color, String? base64,
+      VoidCallback onTap) {
+    final bytes = base64 != null
+        ? (() {
+            try {
+              return base64Decode(base64);
+            } catch (_) {
+              return null;
+            }
+          })()
+        : null;
+    final hasPhoto = bytes != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: hasPhoto ? color.withValues(alpha: 0.05) : const Color(0xFFF7F9F8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: hasPhoto ? color.withValues(alpha: 0.5) : const Color(0xFFDDE3E0)),
+        ),
+        child: Row(children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: hasPhoto
+                ? Image.memory(bytes, width: 52, height: 52, fit: BoxFit.cover)
+                : Container(
+                    width: 52, height: 52,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, size: 24, color: color.withValues(alpha: 0.5)),
+                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: hasPhoto ? color : const Color(0xFF374151))),
+              const SizedBox(height: 2),
+              Text(hasPhoto ? 'Tap to change' : 'Tap to add photo (optional)',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+            ]),
+          ),
+          Icon(
+            hasPhoto ? Icons.check_circle_rounded : Icons.add_photo_alternate_outlined,
+            size: 20,
+            color: hasPhoto ? color : const Color(0xFF9CA3AF),
+          ),
+        ]),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -774,10 +917,15 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
       'address': _address.text.trim(),
       'isActive': _isActive,
       'photo': _photoBase64 ?? '',
+      'aadharPhoto': _aadharPhotoBase64 ?? '',
+      'panPhoto': _panPhotoBase64 ?? '',
     };
-    if (_empCode.text.trim().isNotEmpty) body['empCode'] = _empCode.text.trim();
     if (_branchId != null) body['branch'] = _branchId;
     if (_joiningDate != null) body['joiningDate'] = _joiningDate!.toIso8601String();
+    final hr = double.tryParse(_hourRate.text.trim());
+    if (hr != null) body['hourRate'] = hr;
+    if (_aadharNo.text.trim().isNotEmpty) body['aadharNo'] = _aadharNo.text.trim();
+    if (_panNo.text.trim().isNotEmpty) body['panNo'] = _panNo.text.trim();
 
     final res = _isEdit
         ? await ApiService.put('/employees/${widget.employee!['_id']}', body)
@@ -876,9 +1024,6 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
                 _field(_name, 'Full Name', Icons.person_outline_rounded,
                     hint: 'e.g. Ravi Kumar', required: true),
                 const SizedBox(height: 14),
-                _field(_empCode, 'Employee Code', Icons.tag_rounded,
-                    hint: 'e.g. EMP001 (auto if empty)'),
-                const SizedBox(height: 14),
                 _field(_designation, 'Designation', Icons.work_outline_rounded,
                     hint: 'e.g. Site Engineer', required: true),
                 const SizedBox(height: 14),
@@ -893,6 +1038,10 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
                 const SizedBox(height: 14),
                 _field(_address, 'Address', Icons.location_on_outlined,
                     hint: 'Optional', maxLines: 2),
+                const SizedBox(height: 14),
+                _field(_hourRate, 'Hour Rate (₹)', Icons.access_time_outlined,
+                    hint: 'Optional', type: TextInputType.numberWithOptions(decimal: true),
+                    readOnly: true),
                 const SizedBox(height: 14),
 
                 // Branch dropdown
@@ -934,6 +1083,41 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
                       ),
                     ),
                   ),
+                ),
+                const SizedBox(height: 14),
+
+                // Documents section
+                _sectionLabel('Documents (Optional)'),
+                const SizedBox(height: 10),
+                _field(_aadharNo, 'Aadhaar Card Number', Icons.credit_card_outlined,
+                    hint: 'Optional · 12-digit number',
+                    type: TextInputType.number),
+                const SizedBox(height: 10),
+                _docPhotoTile(
+                  'Aadhaar Card Photo',
+                  Icons.credit_card_outlined,
+                  const Color(0xFF0891B2),
+                  _aadharPhotoBase64,
+                  () async {
+                    await _pickDocumentPhoto(_aadharPhotoBase64, (v) {
+                      setState(() => _aadharPhotoBase64 = v);
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+                _field(_panNo, 'PAN Card Number', Icons.badge_outlined,
+                    hint: 'Optional · e.g. ABCDE1234F'),
+                const SizedBox(height: 10),
+                _docPhotoTile(
+                  'PAN Card Photo',
+                  Icons.badge_outlined,
+                  const Color(0xFF7C3AED),
+                  _panPhotoBase64,
+                  () async {
+                    await _pickDocumentPhoto(_panPhotoBase64, (v) {
+                      setState(() => _panPhotoBase64 = v);
+                    });
+                  },
                 ),
                 const SizedBox(height: 14),
 
@@ -999,6 +1183,20 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
       ],
     );
   }
+
+  Widget _sectionLabel(String text) => Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 2),
+    child: Row(children: [
+      Container(width: 3, height: 14,
+          decoration: BoxDecoration(
+              color: _accent, borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 8),
+      Text(text,
+          style: const TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w600,
+              color: Color(0xFF374151), letterSpacing: 0.3)),
+    ]),
+  );
 
   Widget _activeToggle() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1071,12 +1269,19 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
     String? hint,
     TextInputType type = TextInputType.text,
     int maxLines = 1,
+    bool readOnly = false,
   }) {
     return TextFormField(
       controller: ctrl,
       keyboardType: type,
       maxLines: maxLines,
-      decoration: _fieldDecoration(label, icon, hint: hint),
+      readOnly: readOnly,
+      style: readOnly
+          ? const TextStyle(color: Color(0xFF6B7280))
+          : null,
+      decoration: _fieldDecoration(label, icon, hint: hint).copyWith(
+        fillColor: readOnly ? const Color(0xFFF3F4F6) : const Color(0xFFF7F9F8),
+      ),
       validator: required
           ? (v) => (v == null || v.trim().isEmpty) ? '$label is required' : null
           : null,
