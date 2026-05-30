@@ -55,20 +55,33 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   Future<void> _loadDropdownData() async {
     final auth = context.read<AuthService>();
-    final results = await Future.wait([
-      ApiService.get('/branches'),
-      ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
-    ]);
-    if (mounted) setState(() {
-      _branches = results[0]['data'] ?? [];
-      final all = List.from(results[1]['data'] ?? []);
-      if (auth.isAdmin) {
-        _employees = all; // all active employees
-      } else {
-        final linked = auth.linkedEmployeeIds;
-        _employees = all.where((e) => linked.contains(e['_id']?.toString())).toList();
+    if (auth.isAdmin) {
+      final results = await Future.wait([
+        ApiService.get('/branches'),
+        ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
+      ]);
+      if (mounted) {
+        setState(() {
+          _branches = results[0]['data'] ?? [];
+          _employees = List.from(results[1]['data'] ?? []);
+        });
       }
-    });
+    } else {
+      final results = await Future.wait([
+        ApiService.get('/branches'),
+        ApiService.get('/auth/me'),
+      ]);
+      if (mounted) {
+        setState(() {
+          _branches = results[0]['data'] ?? [];
+          final me = results[1];
+          if (me['success'] == true) {
+            final emps = me['data']?['employees'];
+            _employees = emps is List ? List.from(emps.where((e) => e != null)) : [];
+          }
+        });
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -787,33 +800,38 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
 
   Future<void> _loadDropdowns() async {
     final auth = context.read<AuthService>();
+    if (!mounted) return;
+
+    if (auth.isAdmin) {
+      final results = await Future.wait([
+        ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
+        ApiService.get('/branches'),
+      ]);
+      if (!mounted) return;
+      final allEmps = List.from(results[0]['data'] ?? []);
+      setState(() {
+        _employees = allEmps;
+        _branches = results[1]['data'] ?? [];
+      });
+      return;
+    }
+
+    // Non-admin: get linked employees directly from /auth/me
     final results = await Future.wait([
-      ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/auth/me'),
       ApiService.get('/branches'),
-      if (!auth.isAdmin) ApiService.get('/auth/me'),
     ]);
     if (!mounted) return;
-    final allEmps = List.from(results[0]['data'] ?? []);
 
-    // Refresh linked employee IDs from latest /auth/me for non-admin
-    List<String> linkedIds = auth.linkedEmployeeIds;
-    if (!auth.isAdmin && results.length > 2) {
-      final me = results[2];
-      if (me['success'] == true) {
-        final emps = me['data']?['employees'];
-        if (emps is List) {
-          linkedIds = emps.map((e) {
-            if (e is Map) return e['_id']?.toString() ?? '';
-            if (e is String) return e;
-            return '';
-          }).where((id) => id.isNotEmpty).toList();
-        }
+    final me = results[0];
+    List filtered = [];
+    if (me['success'] == true) {
+      final emps = me['data']?['employees'];
+      if (emps is List) {
+        filtered = emps.where((e) => e != null).toList();
       }
     }
 
-    final filtered = auth.isAdmin
-        ? allEmps
-        : allEmps.where((e) => linkedIds.contains(e['_id']?.toString())).toList();
     setState(() {
       _employees = filtered;
       _branches = results[1]['data'] ?? [];
