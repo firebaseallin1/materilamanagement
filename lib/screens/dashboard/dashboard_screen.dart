@@ -61,7 +61,31 @@ class _DashboardScreenState extends State<DashboardScreen>
         parent: _ctrl, curve: const Interval(0.4, 0.75, curve: Curves.easeOut));
     _fadeTable = CurvedAnimation(
         parent: _ctrl, curve: const Interval(0.6, 1.0, curve: Curves.easeOut));
-    _loadDashboard();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthService>();
+      if (auth.isAdmin) {
+        _loadDashboard();
+      } else {
+        // Set first accessible screen for non-admin (Attendance = 1)
+        final idx = _firstAccessibleIndex(auth);
+        if (mounted) setState(() => _navIndex = idx);
+      }
+    });
+  }
+
+  static const _screenIndexMap = {
+    'attendance': 1, 'advances': 14, 'stock': 2, 'transport': 3,
+    'measurements': 17, 'expenses': 4, 'payments': 5, 'location': 6,
+    'materials': 7, 'users': 8, 'branches': 10, 'category': 11,
+    'expense_cat': 12, 'user_cat': 13, 'employees': 15,
+    'outstanding': 16, 'reports': 9,
+  };
+
+  int _firstAccessibleIndex(AuthService auth) {
+    for (final key in _screenIndexMap.keys) {
+      if (auth.canAccess(key)) return _screenIndexMap[key]!;
+    }
+    return 1; // fallback to attendance index
   }
 
   @override
@@ -119,9 +143,12 @@ class _DashboardScreenState extends State<DashboardScreen>
               style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
           const SizedBox(height: 20),
           OutlinedButton.icon(
-            onPressed: () => setState(() => _navIndex = 0),
-            icon: const Icon(Icons.dashboard_outlined, size: 16),
-            label: const Text('Go to Dashboard'),
+            onPressed: () {
+              final auth = context.read<AuthService>();
+              setState(() => _navIndex = auth.isAdmin ? 0 : _firstAccessibleIndex(auth));
+            },
+            icon: const Icon(Icons.home_outlined, size: 16),
+            label: const Text('Go to Home'),
             style: OutlinedButton.styleFrom(
               foregroundColor: _kSidebar,
               side: const BorderSide(color: Color(0xFFD1D5DB)),
@@ -262,7 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ? const ExpenseCategoryScreen()
             : _accessDenied();
       case 18:
-        return const MeasurementTypeScreen();
+        return auth.isAdmin ? const MeasurementTypeScreen() : _accessDenied();
       case 13:
         return auth.canAccess('user_cat')
             ? const UserCategoryScreen()
