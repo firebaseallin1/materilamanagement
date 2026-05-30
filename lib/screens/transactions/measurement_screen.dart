@@ -994,10 +994,51 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                       style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
                 ])),
           ],
-          onSelected: (v) {
-            if (v == 'edit') _openForm(item);
-            if (v == 'pdf') MeasurementPdf.generate(item);
-            if (v == 'delete') _delete(item['_id'] as String);
+          onSelected: (v) async {
+            if (v == 'edit') { _openForm(item); return; }
+            if (v == 'delete') { _delete(item['_id'] as String); return; }
+            if (v == 'pdf') {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const AlertDialog(
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(14))),
+                  contentPadding: EdgeInsets.fromLTRB(24, 24, 24, 20),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2E7D52))),
+                      SizedBox(height: 20),
+                      Text('Generating PDF…',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1B3A27))),
+                      SizedBox(height: 6),
+                      Text('Please wait',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                    ],
+                  ),
+                ),
+              );
+              try {
+                await MeasurementPdf.generate(item);
+              } catch (e) {
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('PDF error: $e'),
+                    backgroundColor: Colors.red.shade700,
+                    behavior: SnackBarBehavior.floating,
+                  ));
+                }
+                return;
+              }
+              if (mounted) Navigator.of(context).pop();
+            }
           },
         ),
       );
