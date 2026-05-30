@@ -1354,7 +1354,8 @@ class _SidebarContent extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             children: [
               _sectionLabel('MAIN'),
-              _navItem(0, Icons.dashboard_outlined, 'Dashboard', null),
+              if (auth.isAdmin)
+                _navItem(0, Icons.dashboard_outlined, 'Dashboard', null),
               const SizedBox(height: 8),
               if (_hasAny(auth, [
                 'attendance',
@@ -1409,7 +1410,8 @@ class _SidebarContent extends StatelessWidget {
                 if (auth.canAccess('user_cat'))
                   _navItem(
                       13, Icons.label_outline_rounded, 'User Category', null),
-                _navItem(18, Icons.straighten_rounded, 'Meas. Types', null),
+                if (auth.isAdmin)
+                  _navItem(18, Icons.straighten_rounded, 'Meas. Types', null),
                 if (auth.canAccess('materials'))
                   _navItem(7, Icons.widgets_outlined, 'Material', null),
                 if (auth.canAccess('employees'))

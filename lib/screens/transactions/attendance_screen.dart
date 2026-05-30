@@ -790,12 +790,30 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
     final results = await Future.wait([
       ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
       ApiService.get('/branches'),
+      if (!auth.isAdmin) ApiService.get('/auth/me'),
     ]);
     if (!mounted) return;
     final allEmps = List.from(results[0]['data'] ?? []);
+
+    // Refresh linked employee IDs from latest /auth/me for non-admin
+    List<String> linkedIds = auth.linkedEmployeeIds;
+    if (!auth.isAdmin && results.length > 2) {
+      final me = results[2];
+      if (me['success'] == true) {
+        final emps = me['data']?['employees'];
+        if (emps is List) {
+          linkedIds = emps.map((e) {
+            if (e is Map) return e['_id']?.toString() ?? '';
+            if (e is String) return e;
+            return '';
+          }).where((id) => id.isNotEmpty).toList();
+        }
+      }
+    }
+
     final filtered = auth.isAdmin
-        ? allEmps // admin → all active employees
-        : allEmps.where((e) => auth.linkedEmployeeIds.contains(e['_id']?.toString())).toList();
+        ? allEmps
+        : allEmps.where((e) => linkedIds.contains(e['_id']?.toString())).toList();
     setState(() {
       _employees = filtered;
       _branches = results[1]['data'] ?? [];
