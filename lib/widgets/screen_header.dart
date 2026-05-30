@@ -168,12 +168,6 @@ class ScreenHeader extends StatelessWidget {
                   _AddButton(label: addLabel ?? 'Add', onTap: onAdd!),
                   const SizedBox(width: 14),
                 ],
-                // Company logo + name
-                _CompanyBadge(),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: SizedBox(height: 28, child: VerticalDivider()),
-                ),
                 _HeaderIconBtn(
                     icon: Icons.mail_outline_rounded, onTap: () {}),
                 const SizedBox(width: 6),

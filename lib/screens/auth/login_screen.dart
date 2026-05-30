@@ -119,18 +119,12 @@ class _LoginScreenState extends State<LoginScreen>
               FadeTransition(
                 opacity: _fade,
                 child: Column(children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Image.asset(
-                      CompanyInfo.logoAsset,
-                      width: 40, height: 40,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.grid_view_rounded, color: Colors.white, size: 30),
-                    ),
+                  Image.asset(
+                    CompanyInfo.logoAsset,
+                    width: 72, height: 72,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Icons.grid_view_rounded, color: Colors.white, size: 36),
                   ),
                   const SizedBox(height: 12),
                   Text(CompanyInfo.name,
@@ -181,18 +175,12 @@ class _LoginScreenState extends State<LoginScreen>
           children: [
             // Card header
             Row(children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _kAccent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Image.asset(
-                  CompanyInfo.logoAsset,
-                  width: 28, height: 28,
-                  errorBuilder: (_, __, ___) => const Icon(
-                      Icons.grid_view_rounded, color: _kAccent, size: 22),
-                ),
+              Image.asset(
+                CompanyInfo.logoAsset,
+                width: 44, height: 44,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                    Icons.grid_view_rounded, color: _kAccent, size: 22),
               ),
               const SizedBox(width: 12),
               Column(
@@ -362,18 +350,12 @@ class _BrandPanel extends StatelessWidget {
               children: [
                 // Brand mark
                 Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Image.asset(
-                      CompanyInfo.logoAsset,
-                      width: 36, height: 36,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.grid_view_rounded, color: Colors.white, size: 26),
-                    ),
+                  Image.asset(
+                    CompanyInfo.logoAsset,
+                    width: 56, height: 56,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Icons.grid_view_rounded, color: Colors.white, size: 26),
                   ),
                   const SizedBox(width: 14),
                   Text(CompanyInfo.name,

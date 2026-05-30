@@ -1332,22 +1332,12 @@ class _SidebarContent extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
           child: Row(children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                  color: _kSidebarActive,
-                  borderRadius: BorderRadius.circular(8)),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  CompanyInfo.logoAsset,
-                  width: 36, height: 36,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
-                      Icons.grid_view_rounded, color: Colors.white, size: 20),
-                ),
-              ),
+            Image.asset(
+              CompanyInfo.logoAsset,
+              width: 40, height: 40,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(
+                  Icons.grid_view_rounded, color: Colors.white, size: 24),
             ),
             const SizedBox(width: 10),
             const Text(CompanyInfo.name,

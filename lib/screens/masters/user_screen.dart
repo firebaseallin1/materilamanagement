@@ -427,7 +427,8 @@ class _UserScreenState extends State<UserScreen> {
           SizedBox(width: 28, child: Text('#', style: _kUHdr)),
           SizedBox(width: 12),
           Expanded(flex: 3, child: Text('Name', style: _kUHdr)),
-          Expanded(flex: 3, child: Text('User ID', style: _kUHdr)),
+          Expanded(flex: 2, child: Text('User ID', style: _kUHdr)),
+          Expanded(flex: 2, child: Text('Password', style: _kUHdr)),
           Expanded(flex: 2, child: Text('Branch', style: _kUHdr)),
           Expanded(flex: 2, child: Text('User Category', style: _kUHdr)),
           SizedBox(
@@ -448,45 +449,40 @@ class _UserScreenState extends State<UserScreen> {
 
   Widget _buildRow(Map u, int index) {
     final isActive = u['isActive'] ?? true;
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
-          child: Row(children: [
-            SizedBox(
-              width: 28,
-              child: Text('${index + 1}',
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF9CA3AF))),
-            ),
-            const SizedBox(width: 12),
-            Expanded(flex: 3, child: _nameCell(u, index)),
-            Expanded(
-              flex: 3,
-              child: Text(u['userId'] ?? '—',
-                  style: const TextStyle(
-                      fontSize: 13, color: Color(0xFF374151)),
-                  overflow: TextOverflow.ellipsis),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(u['branch']?['name'] ?? '—',
-                  style: const TextStyle(
-                      fontSize: 13, color: Color(0xFF374151)),
-                  overflow: TextOverflow.ellipsis),
-            ),
-            Expanded(
-              flex: 2,
-              child: _categoryBadge(u),
-            ),
-            SizedBox(
-                width: 88,
-                child: Center(child: _statusBadge(isActive == true))),
-            _actionMenu(u),
-          ]),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
+      child: Row(children: [
+        SizedBox(
+          width: 28,
+          child: Text('${index + 1}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
         ),
+        const SizedBox(width: 12),
+        Expanded(flex: 3, child: _nameCell(u, index)),
+        Expanded(
+          flex: 2,
+          child: Text(u['userId'] ?? '—',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+              overflow: TextOverflow.ellipsis),
+        ),
+        Expanded(
+          flex: 2,
+          child: Text(u['password'] ?? '—',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+              overflow: TextOverflow.ellipsis),
+        ),
+        Expanded(
+          flex: 2,
+          child: Text(u['branch']?['name'] ?? '—',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+              overflow: TextOverflow.ellipsis),
+        ),
+        Expanded(flex: 2, child: _categoryBadge(u)),
+        SizedBox(width: 88, child: Center(child: _statusBadge(isActive == true))),
+        _actionMenu(u),
+      ]),
     );
   }
 
@@ -1074,6 +1070,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
       _nameCtrl.text = widget.user!['name'] ?? '';
       _generatedUserId = widget.user!['userId'] as String?;
       _phoneCtrl.text = widget.user!['phone'] ?? '';
+      _passCtrl.text = widget.user!['password'] ?? '';
       _branchId = widget.user!['branch']?['_id'];
       _isActive = widget.user!['isActive'] ?? true;
       final rawPhoto = widget.user!['photo'] as String?;
@@ -1820,8 +1817,40 @@ class _UserFormPanelState extends State<UserFormPanel> {
             ),
             const SizedBox(height: 14),
 
-            // Auto-generated User ID
-            _userIdField(),
+            // Auto-generated User ID + Password side by side
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _userIdField()),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _passCtrl,
+                    obscureText: _obscurePass,
+                    decoration: _dec(
+                            _isEdit
+                                ? 'New Password'
+                                : 'Password',
+                            Icons.lock_outline_rounded)
+                        .copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePass
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 18,
+                          color: const Color(0xFF9CA3AF),
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscurePass = !_obscurePass),
+                      ),
+                    ),
+                    validator: (v) =>
+                        !_isEdit && v!.trim().isEmpty ? 'Password is required' : null,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
 
             // Phone
@@ -1830,33 +1859,6 @@ class _UserFormPanelState extends State<UserFormPanel> {
               keyboardType: TextInputType.phone,
               decoration:
                   _dec('Phone', Icons.phone_outlined, hint: 'Optional'),
-            ),
-            const SizedBox(height: 14),
-
-            // Password
-            TextFormField(
-              controller: _passCtrl,
-              obscureText: _obscurePass,
-              decoration: _dec(
-                      _isEdit
-                          ? 'New Password (leave blank to keep)'
-                          : 'Password',
-                      Icons.lock_outline_rounded)
-                  .copyWith(
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePass
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 18,
-                    color: const Color(0xFF9CA3AF),
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePass = !_obscurePass),
-                ),
-              ),
-              validator: (v) =>
-                  !_isEdit && v!.trim().isEmpty ? 'Password is required' : null,
             ),
             const SizedBox(height: 14),
 
