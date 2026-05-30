@@ -82,17 +82,17 @@ class MeasurementPdf {
         footer: (ctx) => _pageFooter(ctx, fontRegular),
         build: (_) => [
           pw.SizedBox(height: 14),
-          _entryDetails(
+          ..._entryDetails(
               dcNo, branch, location, site, floor, villa, remark, date,
               fontRegular, fontBold),
           pw.SizedBox(height: 16),
-          _rowsTable(rows, fontRegular, fontBold),
+          ..._rowsTable(rows, fontRegular, fontBold),
           if (byType.isNotEmpty) ...[
             pw.SizedBox(height: 16),
-            _typeSummary(byType, fontRegular, fontBold),
+            ..._typeSummary(byType, fontRegular, fontBold),
           ],
           pw.SizedBox(height: 16),
-          _financialSummary(
+          ..._financialSummary(
               netTotal, rate, totalAmt, grossTotal, openTotal,
               fontRegular, fontBold),
         ],
@@ -179,7 +179,7 @@ class MeasurementPdf {
   }
 
   // ── Entry details ─────────────────────────────────────────────────────────
-  static pw.Widget _entryDetails(String dcNo, String branch, String location,
+  static List<pw.Widget> _entryDetails(String dcNo, String branch, String location,
       String site, String floor, String villa, String remark, String date,
       pw.Font fontRegular, pw.Font fontBold) {
     final fields = <String, String>{};
@@ -218,37 +218,32 @@ class MeasurementPdf {
           ]),
         );
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('ENTRY DETAILS', fontBold),
-        pw.SizedBox(height: 8),
-        pw.Container(
-          padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: _bg,
-            border: pw.Border.all(color: _border, width: 0.5),
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-          ),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                  child:
-                      pw.Column(children: leftEntries.map(kvPair).toList())),
-              pw.SizedBox(width: 24),
-              pw.Expanded(
-                  child:
-                      pw.Column(children: rightEntries.map(kvPair).toList())),
-            ],
-          ),
+    return [
+      _sectionHeader('ENTRY DETAILS', fontBold),
+      pw.SizedBox(height: 8),
+      pw.Container(
+        padding: const pw.EdgeInsets.all(12),
+        decoration: pw.BoxDecoration(
+          color: _bg,
+          border: pw.Border.all(color: _border, width: 0.5),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
         ),
-      ],
-    );
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+                child: pw.Column(children: leftEntries.map(kvPair).toList())),
+            pw.SizedBox(width: 24),
+            pw.Expanded(
+                child: pw.Column(children: rightEntries.map(kvPair).toList())),
+          ],
+        ),
+      ),
+    ];
   }
 
   // ── Measurement rows table ────────────────────────────────────────────────
-  static pw.Widget _rowsTable(
+  static List<pw.Widget> _rowsTable(
       List rows, pw.Font fontRegular, pw.Font fontBold) {
     const hdrs = [
       '#', 'Length', 'Width', 'Nos', 'Total',
@@ -285,15 +280,13 @@ class MeasurementPdf {
             fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
             color: color);
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('MEASUREMENT ROWS  (${rows.length} rows)', fontBold),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(color: _border, width: 0.5),
-          columnWidths: colW,
-          children: [
+    return [
+      _sectionHeader('MEASUREMENT ROWS  (${rows.length} rows)', fontBold),
+      pw.SizedBox(height: 8),
+      pw.Table(
+        border: pw.TableBorder.all(color: _border, width: 0.5),
+        columnWidths: colW,
+        children: [
             // Header
             pw.TableRow(
               decoration: pw.BoxDecoration(color: _bgGreen),
@@ -347,132 +340,109 @@ class MeasurementPdf {
             }),
           ],
         ),
-      ],
-    );
+      ];
   }
 
   // ── Type summary ──────────────────────────────────────────────────────────
-  static pw.Widget _typeSummary(
+  static List<pw.Widget> _typeSummary(
       Map<String, double> byType, pw.Font fontRegular, pw.Font fontBold) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('MEASUREMENT TYPE SUMMARY', fontBold),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(color: _border, width: 0.5),
-          columnWidths: const {
-            0: pw.FlexColumnWidth(2),
-            1: pw.FlexColumnWidth(1.5),
-          },
-          children: [
-            // Header
-            pw.TableRow(
-              decoration: pw.BoxDecoration(color: _bgGreen),
+    return [
+      _sectionHeader('MEASUREMENT TYPE SUMMARY', fontBold),
+      pw.SizedBox(height: 8),
+      pw.Table(
+        border: pw.TableBorder.all(color: _border, width: 0.5),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(2),
+          1: pw.FlexColumnWidth(1.5),
+        },
+        children: [
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: _bgGreen),
+            children: [
+              _tCell('Measurement Type',
+                  style: pw.TextStyle(
+                      font: fontBold, fontSize: 8,
+                      fontWeight: pw.FontWeight.bold, color: _darkGreen)),
+              _tCell('Total Qty',
+                  style: pw.TextStyle(
+                      font: fontBold, fontSize: 8,
+                      fontWeight: pw.FontWeight.bold, color: _darkGreen)),
+            ],
+          ),
+          ...byType.entries.toList().asMap().entries.map((entry) {
+            final i = entry.key;
+            final e = entry.value;
+            return pw.TableRow(
+              decoration: pw.BoxDecoration(
+                  color: i.isEven ? PdfColors.white : _rowAlt),
               children: [
-                _tCell('Measurement Type',
+                _tCell(e.key,
                     style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 8,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _darkGreen)),
-                _tCell('Total Qty',
+                        font: fontBold, fontSize: 8,
+                        fontWeight: pw.FontWeight.bold)),
+                _tCell(_fmt(e.value),
                     style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 8,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _darkGreen)),
+                        font: fontBold, fontSize: 8,
+                        fontWeight: pw.FontWeight.bold, color: _green)),
               ],
-            ),
-            // Data
-            ...byType.entries.toList().asMap().entries.map((entry) {
-              final i = entry.key;
-              final e = entry.value;
-              return pw.TableRow(
-                decoration: pw.BoxDecoration(
-                    color: i.isEven ? PdfColors.white : _rowAlt),
-                children: [
-                  _tCell(e.key,
-                      style: pw.TextStyle(
-                          font: fontBold,
-                          fontSize: 8,
-                          fontWeight: pw.FontWeight.bold)),
-                  _tCell(_fmt(e.value),
-                      style: pw.TextStyle(
-                          font: fontBold,
-                          fontSize: 8,
-                          fontWeight: pw.FontWeight.bold,
-                          color: _green)),
-                ],
-              );
-            }),
-            // Total row
-            pw.TableRow(
-              decoration: pw.BoxDecoration(color: _greenLight),
-              children: [
-                _tCell('Total',
-                    style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 8,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _darkGreen)),
-                _tCell(
-                    _fmt(byType.values
-                        .fold(0.0, (s, v) => s + v)),
-                    style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _darkGreen)),
-              ],
-            ),
-          ],
-        ),
-      ],
-    );
+            );
+          }),
+          pw.TableRow(
+            decoration: pw.BoxDecoration(color: _greenLight),
+            children: [
+              _tCell('Total',
+                  style: pw.TextStyle(
+                      font: fontBold, fontSize: 8,
+                      fontWeight: pw.FontWeight.bold, color: _darkGreen)),
+              _tCell(
+                  _fmt(byType.values.fold(0.0, (s, v) => s + v)),
+                  style: pw.TextStyle(
+                      font: fontBold, fontSize: 9,
+                      fontWeight: pw.FontWeight.bold, color: _darkGreen)),
+            ],
+          ),
+        ],
+      ),
+    ];
   }
 
   // ── Financial summary ─────────────────────────────────────────────────────
-  static pw.Widget _financialSummary(double net, double rate, double totalAmt,
+  static List<pw.Widget> _financialSummary(double net, double rate, double totalAmt,
       double gross, double open, pw.Font fontRegular, pw.Font fontBold) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _sectionHeader('FINANCIAL SUMMARY', fontBold),
-        pw.SizedBox(height: 8),
-        pw.Container(
-          padding: const pw.EdgeInsets.all(14),
-          decoration: pw.BoxDecoration(
-            color: _darkGreen,
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-          ),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-            children: [
-              if (open > 0) ...[
-                _finStat('Gross Qty', _fmt(gross), PdfColors.white,
-                    fontRegular, fontBold),
-                _finDivider(),
-                // ASCII minus instead of Unicode U+2212
-                _finStat('Open (-)', _fmt(open),
-                    PdfColor.fromHex('FCA5A5'), fontRegular, fontBold),
-                _finDivider(),
-              ],
-              _finStat('Net Qty', _fmt(net), PdfColor.fromHex('86EFAC'),
-                  fontRegular, fontBold),
-              if (rate > 0) ...[
-                _finDivider(),
-                _finStat('Rate (Rs.)', _fmt(rate),
-                    PdfColor.fromHex('93C5FD'), fontRegular, fontBold),
-                _finDivider(),
-                _finStat('Total Amount', 'Rs.${_fmt(totalAmt)}',
-                    PdfColor.fromHex('FED7AA'), fontRegular, fontBold),
-              ],
-            ],
-          ),
+    return [
+      _sectionHeader('FINANCIAL SUMMARY', fontBold),
+      pw.SizedBox(height: 8),
+      pw.Container(
+        padding: const pw.EdgeInsets.all(14),
+        decoration: pw.BoxDecoration(
+          color: _darkGreen,
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
         ),
-      ],
-    );
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+          children: [
+            if (open > 0) ...[
+              _finStat('Gross Qty', _fmt(gross), PdfColors.white,
+                  fontRegular, fontBold),
+              _finDivider(),
+              _finStat('Open (-)', _fmt(open),
+                  PdfColor.fromHex('FCA5A5'), fontRegular, fontBold),
+              _finDivider(),
+            ],
+            _finStat('Net Qty', _fmt(net), PdfColor.fromHex('86EFAC'),
+                fontRegular, fontBold),
+            if (rate > 0) ...[
+              _finDivider(),
+              _finStat('Rate (Rs.)', _fmt(rate),
+                  PdfColor.fromHex('93C5FD'), fontRegular, fontBold),
+              _finDivider(),
+              _finStat('Total Amount', 'Rs.${_fmt(totalAmt)}',
+                  PdfColor.fromHex('FED7AA'), fontRegular, fontBold),
+            ],
+          ],
+        ),
+      ),
+    ];
   }
 
   // ── Small helpers ─────────────────────────────────────────────────────────
