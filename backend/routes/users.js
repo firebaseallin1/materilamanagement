@@ -43,7 +43,7 @@ router.post('/', protect, adminOnly, async (req, res) => {
 
 router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
-    const { password, ...rest } = req.body;
+    const { password, userId, ...rest } = req.body;
     const updateData = { ...rest };
     if (password && password.trim()) updateData.password = password.trim();
     const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true })

@@ -1813,7 +1813,7 @@ class _UserFormPanelState extends State<UserFormPanel> {
                 if (!_isEdit) _generateUserId();
               },
               validator: (v) =>
-                  v == null ? 'Please select a user category' : null,
+                  !_isEdit && v == null ? 'Please select a user category' : null,
             ),
             const SizedBox(height: 14),
 
