@@ -1504,8 +1504,15 @@ class _UserFormPanelState extends State<UserFormPanel> {
         .where((c) => c['_id'] == _userCategoryId)
         .firstOrNull;
     final catName = (selCat?['name'] as String? ?? '').trim();
-    final role =
-        catName.toLowerCase().contains('admin') ? 'admin' : 'user';
+    // In edit mode with no category selected, preserve the existing role
+    final String role;
+    if (catName.isNotEmpty) {
+      role = catName.toLowerCase().contains('admin') ? 'admin' : 'user';
+    } else if (_isEdit) {
+      role = (widget.user!['role'] as String? ?? 'user');
+    } else {
+      role = 'user';
+    }
 
     final body = <String, dynamic>{
       'name': _nameCtrl.text.trim(),
