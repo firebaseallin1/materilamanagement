@@ -180,7 +180,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       context: context,
       initialDate: isFrom ? (_fromDate ?? now) : (_toDate ?? now),
       firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
+      lastDate: DateTime(now.year, now.month, now.day),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(primary: Color(0xFF16A34A)),
@@ -997,7 +997,18 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
                 isExpanded: true,
               ),
               const SizedBox(height: 14),
-              DatePickerField(label: 'Date', value: _date, onChanged: (d) => setState(() => _date = d)),
+              Builder(builder: (ctx) {
+                final isAdmin = ctx.read<AuthService>().isAdmin;
+                final today = DateTime.now();
+                final todayOnly = DateTime(today.year, today.month, today.day);
+                return DatePickerField(
+                  label: 'Date',
+                  value: _date,
+                  onChanged: (d) => setState(() => _date = d),
+                  firstDate: isAdmin ? DateTime(2020) : todayOnly,
+                  lastDate: todayOnly,
+                );
+              }),
               const SizedBox(height: 14),
               _switchRow(
                 label: 'Present', subtitle: _isPresent ? '8 regular hours' : 'Marked as absent',

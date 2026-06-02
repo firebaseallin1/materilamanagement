@@ -82,23 +82,35 @@ class DatePickerField extends StatelessWidget {
   final String label;
   final DateTime? value;
   final ValueChanged<DateTime> onChanged;
+  final DateTime? firstDate;
+  final DateTime? lastDate;
 
   const DatePickerField({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.firstDate,
+    this.lastDate,
   });
 
   @override
   Widget build(BuildContext context) {
+    final first = firstDate ?? DateTime(2020);
+    final last  = lastDate  ?? DateTime(2100);
+    final readOnly = first == last ||
+        (first.year == last.year && first.month == last.month && first.day == last.day);
+
     return GestureDetector(
-      onTap: () async {
+      onTap: readOnly ? null : () async {
+        final initial = (value != null && !value!.isBefore(first) && !value!.isAfter(last))
+            ? value!
+            : last;
         final picked = await showDatePicker(
           context: context,
-          initialDate: value ?? DateTime.now(),
-          firstDate: DateTime(2020),
-          lastDate: DateTime(2100),
+          initialDate: initial,
+          firstDate: first,
+          lastDate: last,
         );
         if (picked != null) onChanged(picked);
       },
@@ -106,14 +118,19 @@ class DatePickerField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
-          suffixIcon: const Icon(Icons.calendar_today),
+          suffixIcon: Icon(
+            readOnly ? Icons.calendar_today : Icons.calendar_today,
+            color: readOnly ? Colors.grey : null,
+          ),
         ),
         child: Text(
           value != null
               ? DateFormat('dd MMM yyyy').format(value!)
               : 'Select date',
           style: TextStyle(
-            color: value != null ? Colors.black87 : Colors.grey,
+            color: value != null
+                ? (readOnly ? Colors.grey.shade600 : Colors.black87)
+                : Colors.grey,
           ),
         ),
       ),
