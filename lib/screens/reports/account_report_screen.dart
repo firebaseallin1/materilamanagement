@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import '../../constants/company_info.dart';
 import '../../services/api_service.dart';
 import '../../widgets/screen_header.dart';
 
@@ -194,6 +199,234 @@ class _AccountViewState extends State<_AccountView> {
   static final _dateFmt = DateFormat('dd MMM yy');
   static final _amtFmt  = NumberFormat('#,##0.00');
 
+  // ── PDF generation ────────────────────────────────────────────────────────
+
+  Future<void> _generatePdf() async {
+    final entries = _entries;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        contentPadding: EdgeInsets.fromLTRB(24, 24, 24, 20),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_aGreen)),
+          SizedBox(height: 18),
+          Text('Generating PDF…', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _aPrimary)),
+          SizedBox(height: 4),
+          Text('Please wait', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+        ]),
+      ),
+    );
+
+    try {
+      final fontRegular = await PdfGoogleFonts.notoSansRegular();
+      final fontBold    = await PdfGoogleFonts.notoSansBold();
+      final theme = pw.ThemeData.withFont(base: fontRegular, bold: fontBold);
+
+      pw.ImageProvider? logoImg;
+      try {
+        final data = await rootBundle.load(CompanyInfo.logoAsset);
+        logoImg = pw.MemoryImage(data.buffer.asUint8List());
+      } catch (_) {}
+
+      final darkGreen = PdfColor.fromHex('1B3A27');
+      final green     = PdfColor.fromHex('16A34A');
+      final red       = PdfColor.fromHex('DC2626');
+      final grey      = PdfColor.fromHex('6B7280');
+      final greyLight = PdfColor.fromHex('9CA3AF');
+      final border    = PdfColor.fromHex('E5E7EB');
+      final bgGreen   = PdfColor.fromHex('F0F9F4');
+      final rowAlt    = PdfColor.fromHex('FAFAFA');
+
+      final accLabel = _accountType == 'all' ? 'All Accounts' : _modeLabel(_accountType);
+      final branchName = _branchId == null
+          ? 'All Branches'
+          : (_branches.firstWhere((b) => b['_id'] == _branchId, orElse: () => {})['name'] ?? '—');
+
+      final pdf = pw.Document();
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 40),
+          theme: theme,
+          maxPages: 500,
+          header: (_) => _pdfHeader(logoImg, fontBold, fontRegular,
+              accLabel, branchName, darkGreen, grey, greyLight, border),
+          footer: (ctx) => _pdfFooter(ctx, fontRegular, greyLight, border),
+          build: (_) => [
+            pw.SizedBox(height: 10),
+            // Summary row
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: bgGreen,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                border: pw.Border.all(color: border, width: 0.5),
+              ),
+              child: pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly, children: [
+                _pdfSummaryCell('Total Credit (In)', '₹${_amtFmt.format(_totalCredit)}', green, fontRegular, fontBold),
+                _pdfDivider(),
+                _pdfSummaryCell('Total Debit (Out)', '₹${_amtFmt.format(_totalDebit)}', red, fontRegular, fontBold),
+                _pdfDivider(),
+                _pdfSummaryCell(
+                  _netBalance >= 0 ? 'Net Balance (Cr)' : 'Net Deficit (Dr)',
+                  '₹${_amtFmt.format(_netBalance.abs())}',
+                  _netBalance >= 0 ? green : red,
+                  fontRegular, fontBold,
+                ),
+              ]),
+            ),
+            pw.SizedBox(height: 14),
+            // Table
+            pw.Table(
+              border: pw.TableBorder.all(color: border, width: 0.5),
+              columnWidths: const {
+                0: pw.FixedColumnWidth(58),
+                1: pw.FlexColumnWidth(2.5),
+                2: pw.FlexColumnWidth(2.0),
+                3: pw.FixedColumnWidth(46),
+                4: pw.FixedColumnWidth(72),
+                5: pw.FixedColumnWidth(72),
+                6: pw.FixedColumnWidth(78),
+              },
+              children: [
+                // Header
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColor.fromHex('1B3A27')),
+                  children: ['Date', 'Description', 'Party', 'Mode', 'Credit (₹)', 'Debit (₹)', 'Balance (₹)']
+                      .map((h) => pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                            child: pw.Text(h,
+                                style: pw.TextStyle(font: fontBold, fontSize: 7.5,
+                                    fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+                          ))
+                      .toList(),
+                ),
+                // Data rows
+                ...entries.asMap().entries.map((en) {
+                  final i = en.key;
+                  final e = en.value;
+                  final isProfit = e.balance >= 0;
+                  return pw.TableRow(
+                    decoration: pw.BoxDecoration(color: i.isEven ? PdfColors.white : rowAlt),
+                    children: [
+                      _pdfCell(_dateFmt.format(e.date), fontRegular, grey, align: pw.TextAlign.center),
+                      _pdfCell(e.description, fontBold, darkGreen),
+                      _pdfCell(e.party, fontRegular, grey),
+                      _pdfCell(_modeLabel(e.mode), fontRegular, grey, align: pw.TextAlign.center),
+                      _pdfCell(e.credit > 0 ? _amtFmt.format(e.credit) : '—', fontBold,
+                          e.credit > 0 ? green : PdfColor.fromHex('D1D5DB'), align: pw.TextAlign.right),
+                      _pdfCell(e.debit > 0 ? _amtFmt.format(e.debit) : '—', fontBold,
+                          e.debit > 0 ? red : PdfColor.fromHex('D1D5DB'), align: pw.TextAlign.right),
+                      _pdfCell(
+                          '${_amtFmt.format(e.balance.abs())} ${e.balance < 0 ? 'Dr' : 'Cr'}',
+                          fontBold, isProfit ? green : red, align: pw.TextAlign.right),
+                    ],
+                  );
+                }),
+                // Total row
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: bgGreen),
+                  children: [
+                    _pdfCell('TOTAL', fontBold, darkGreen),
+                    _pdfCell('', fontRegular, grey),
+                    _pdfCell('', fontRegular, grey),
+                    _pdfCell('', fontRegular, grey),
+                    _pdfCell(_amtFmt.format(_totalCredit), fontBold, green, align: pw.TextAlign.right),
+                    _pdfCell(_amtFmt.format(_totalDebit),  fontBold, red,   align: pw.TextAlign.right),
+                    _pdfCell(
+                        '${_amtFmt.format(_netBalance.abs())} ${_netBalance < 0 ? 'Dr' : 'Cr'}',
+                        fontBold, _netBalance >= 0 ? green : red, align: pw.TextAlign.right),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      if (mounted) Navigator.of(context).pop();
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdf.save(),
+        name: 'AccountReport_${DateFormat('ddMMyyyy').format(_from)}_${DateFormat('ddMMyyyy').format(_to)}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('PDF error: $e'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  static pw.Widget _pdfHeader(
+    pw.ImageProvider? logoImg, pw.Font fontBold, pw.Font fontRegular,
+    String accLabel, String branchName,
+    PdfColor darkGreen, PdfColor grey, PdfColor greyLight, PdfColor border,
+  ) => pw.Column(children: [
+    pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+        if (logoImg != null) ...[pw.Image(logoImg, width: 36, height: 36), pw.SizedBox(width: 8)],
+        pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Text(CompanyInfo.name, style: pw.TextStyle(font: fontBold, fontSize: 13, color: darkGreen)),
+          pw.Text(CompanyInfo.address, style: pw.TextStyle(font: fontRegular, fontSize: 7, color: grey)),
+          pw.Text(CompanyInfo.phone,   style: pw.TextStyle(font: fontRegular, fontSize: 7, color: grey)),
+        ]),
+      ]),
+      pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+        pw.Text('ACCOUNT REPORT', style: pw.TextStyle(font: fontBold, fontSize: 11,
+            fontWeight: pw.FontWeight.bold, color: darkGreen, letterSpacing: 0.5)),
+        pw.SizedBox(height: 2),
+        pw.Text('Account: $accLabel',  style: pw.TextStyle(font: fontRegular, fontSize: 8, color: grey)),
+        pw.Text('Branch: $branchName', style: pw.TextStyle(font: fontRegular, fontSize: 8, color: grey)),
+      ]),
+    ]),
+    pw.SizedBox(height: 8),
+    pw.Divider(color: border, thickness: 1),
+  ]);
+
+  static pw.Widget _pdfFooter(pw.Context ctx, pw.Font fontRegular, PdfColor greyLight, PdfColor border) =>
+      pw.Column(children: [
+        pw.Divider(color: border, thickness: 0.5),
+        pw.SizedBox(height: 3),
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+          pw.Text('Generated by ${CompanyInfo.name}',
+              style: pw.TextStyle(font: fontRegular, fontSize: 7, color: greyLight)),
+          pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+              style: pw.TextStyle(font: fontRegular, fontSize: 7, color: greyLight)),
+        ]),
+      ]);
+
+  static pw.Widget _pdfCell(String text, pw.Font font, PdfColor color,
+      {pw.TextAlign align = pw.TextAlign.left}) =>
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: pw.Text(text,
+            textAlign: align,
+            style: pw.TextStyle(font: font, fontSize: 7.5, color: color)),
+      );
+
+  static pw.Widget _pdfSummaryCell(
+      String label, String value, PdfColor color, pw.Font fontRegular, pw.Font fontBold) =>
+      pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+        pw.Text(value, style: pw.TextStyle(font: fontBold, fontSize: 13,
+            fontWeight: pw.FontWeight.bold, color: color)),
+        pw.SizedBox(height: 3),
+        pw.Text(label, style: pw.TextStyle(font: fontRegular, fontSize: 7.5,
+            color: PdfColor.fromHex('374151'))),
+      ]);
+
+  static pw.Widget _pdfDivider() => pw.Container(
+      width: 1, height: 32, color: PdfColor.fromHex('2E7D52'),
+      margin: const pw.EdgeInsets.symmetric(horizontal: 10));
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -304,6 +537,18 @@ class _AccountViewState extends State<_AccountView> {
           setState(() { _from = DateTime(now.year, now.month, now.day - sun); _to = _from.add(const Duration(days: 6)); });
           _load();
         }),
+        ElevatedButton.icon(
+          onPressed: _loading ? null : _generatePdf,
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 15),
+          label: const Text('PDF', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _aPrimary,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
       ]),
     );
   }
