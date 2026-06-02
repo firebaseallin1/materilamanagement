@@ -1807,7 +1807,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   Future<void> _loadDropdowns() async {
     final results = await Future.wait([
       ApiService.get('/branches', params: {'limit': '1000', 'isActive': 'true'}),
-      ApiService.get('/employees', params: {'limit': '1000'}),
+      ApiService.get('/employees', params: {'limit': '1000', 'isActive': 'true'}),
     ]);
     if (mounted) {
       setState(() {

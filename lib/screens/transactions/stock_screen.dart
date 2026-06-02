@@ -2436,8 +2436,8 @@ class _StockFormPanelState extends State<StockFormPanel> {
 
   Future<void> _loadDropdowns() async {
     final results = await Future.wait([
-      ApiService.get('/materials'),
-      ApiService.get('/branches'),
+      ApiService.get('/materials', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
     ]);
     if (!mounted) return;
     setState(() {

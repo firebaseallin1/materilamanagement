@@ -57,7 +57,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final auth = context.read<AuthService>();
     if (auth.isAdmin) {
       final results = await Future.wait([
-        ApiService.get('/branches'),
+        ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
         ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
       ]);
       if (mounted) {
@@ -68,7 +68,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     } else {
       final results = await Future.wait([
-        ApiService.get('/branches'),
+        ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
         ApiService.get('/auth/me'),
       ]);
       if (mounted) {

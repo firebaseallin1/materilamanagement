@@ -92,8 +92,8 @@ class _UserScreenState extends State<UserScreen> {
     });
     final results = await Future.wait([
       ApiService.get('/users'),
-      ApiService.get('/branches'),
-      ApiService.get('/user-categories'),
+      ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/user-categories', params: {'isActive': 'true', 'limit': '1000'}),
     ]);
     if (mounted) {
       setState(() {

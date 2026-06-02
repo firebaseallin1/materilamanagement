@@ -1309,7 +1309,8 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
 
   Future<void> _loadDropdowns() async {
     final [bRes, mRes] = await Future.wait(
-        [ApiService.get('/branches'), ApiService.get('/materials')]);
+        [ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
+         ApiService.get('/materials', params: {'isActive': 'true', 'limit': '1000'})]);
     if (mounted)
       setState(() {
         _branches = bRes['data'] ?? [];
@@ -1803,7 +1804,8 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
 
   Future<void> _loadDropdowns() async {
     final [bRes, mRes] = await Future.wait(
-        [ApiService.get('/branches'), ApiService.get('/materials')]);
+        [ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
+         ApiService.get('/materials', params: {'isActive': 'true', 'limit': '1000'})]);
     if (mounted)
       setState(() {
         _branches = bRes['data'] ?? [];

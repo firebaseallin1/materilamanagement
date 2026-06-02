@@ -1073,8 +1073,8 @@ class _ExpenseFormPanelState extends State<ExpenseFormPanel> {
 
   Future<void> _loadDropdowns() async {
     final results = await Future.wait([
-      ApiService.get('/branches'),
-      ApiService.get('/expense-categories'),
+      ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/expense-categories', params: {'isActive': 'true', 'limit': '1000'}),
     ]);
     if (mounted) {
       setState(() {

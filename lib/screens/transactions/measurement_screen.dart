@@ -1146,12 +1146,12 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   }
 
   Future<void> _loadBranches() async {
-    final res = await ApiService.get('/branches');
+    final res = await ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'});
     if (mounted) setState(() => _branches = res['data'] ?? []);
   }
 
   Future<void> _loadMeasTypes() async {
-    final res = await ApiService.get('/measurement-types');
+    final res = await ApiService.get('/measurement-types', params: {'isActive': 'true', 'limit': '1000'});
     if (mounted) setState(() => _measTypes = res['data'] ?? []);
   }
 
@@ -1981,12 +1981,12 @@ class _MeasurementFormPanelState extends State<MeasurementFormPanel> {
   }
 
   Future<void> _loadBranches() async {
-    final res = await ApiService.get('/branches');
+    final res = await ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'});
     if (mounted) setState(() => _branches = res['data'] ?? []);
   }
 
   Future<void> _loadMeasTypes() async {
-    final res = await ApiService.get('/measurement-types');
+    final res = await ApiService.get('/measurement-types', params: {'isActive': 'true', 'limit': '1000'});
     if (mounted) setState(() => _measTypes = res['data'] ?? []);
   }
 

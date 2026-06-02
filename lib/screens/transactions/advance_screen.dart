@@ -47,8 +47,8 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
 
   Future<void> _loadDropdownData() async {
     final results = await Future.wait([
-      ApiService.get('/branches'),
-      ApiService.get('/employees'),
+      ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
     ]);
     if (mounted) {
       setState(() {
@@ -888,7 +888,8 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
 
   Future<void> _loadDropdowns() async {
     final results = await Future.wait(
-        [ApiService.get('/employees'), ApiService.get('/branches')]);
+        [ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
+         ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'})]);
     if (mounted) {
       setState(() {
         _users = results[0]['data'] ?? [];

@@ -658,7 +658,7 @@ class _EmployeeFormPanelState extends State<_EmployeeFormPanel> {
   }
 
   Future<void> _loadBranches() async {
-    final res = await ApiService.get('/branches');
+    final res = await ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'});
     if (mounted) {
       setState(() {
         _branches = (res['data'] as List? ?? []).where((b) => b['isActive'] == true).toList();
