@@ -23,6 +23,7 @@ import '../masters/employee_screen.dart';
 import '../transactions/outstanding_screen.dart';
 import '../reports/reports_screen.dart';
 import '../reports/profit_loss_screen.dart';
+import '../reports/account_report_screen.dart';
 import '../../constants/company_info.dart';
 
 const _kSidebar = Color(0xFF1B3A27);
@@ -79,7 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     'measurements': 17, 'expenses': 4, 'payments': 5, 'location': 6,
     'materials': 7, 'users': 8, 'branches': 10, 'category': 11,
     'expense_cat': 12, 'user_cat': 13, 'employees': 15,
-    'outstanding': 16, 'reports': 9, 'profit_loss': 19,
+    'outstanding': 16, 'reports': 9, 'profit_loss': 19, 'account_report': 20,
   };
 
   int _firstAccessibleIndex(AuthService auth) {
@@ -302,6 +303,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       case 19:
         return auth.canAccess('profit_loss')
             ? const ProfitLossScreen()
+            : _accessDenied();
+      case 20:
+        return auth.canAccess('account_report')
+            ? const AccountReportScreen()
             : _accessDenied();
       case 10:
         return auth.canAccess('branches')
@@ -1452,12 +1457,14 @@ class _SidebarContent extends StatelessWidget {
                   _navItem(8, Icons.people_outline, 'Users', null),
                 const SizedBox(height: 8),
               ],
-              if (auth.canAccess('reports') || auth.canAccess('profit_loss')) ...[
+              if (auth.canAccess('reports') || auth.canAccess('profit_loss') || auth.canAccess('account_report')) ...[
                 _sectionLabel('REPORTS'),
                 if (auth.canAccess('reports'))
                   _navItem(9, Icons.bar_chart_outlined, 'Mesr vs Payments', null),
                 if (auth.canAccess('profit_loss'))
                   _navItem(19, Icons.account_balance_outlined, 'Profit & Loss', null),
+                if (auth.canAccess('account_report'))
+                  _navItem(20, Icons.receipt_outlined, 'Account Report', null),
               ],
             ],
           ),
