@@ -95,7 +95,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     setState(() => _loading = true);
     final params = <String, String>{};
     if (_fromDate != null) params['from'] = _fmtDate(_fromDate!);
-    if (_toDate != null) params['to'] = _fmtDate(_toDate!);
+    if (_toDate != null) params['to'] = '${_fmtDate(_toDate!)}T23:59:59';
     if (_filterBranchId != null) params['branch'] = _filterBranchId!;
     if (_filterEmployeeId != null) params['employee'] = _filterEmployeeId!;
     final res = await ApiService.get('/attendance', params: params);
@@ -147,9 +147,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   // ── Computed ───────────────────────────────────────────────────────────────
 
+  static String _datePart(String iso) =>
+      iso.length >= 10 ? iso.substring(0, 10) : iso;
+
   List get _filtered {
     final auth = context.read<AuthService>();
     final linkedIds = auth.isAdmin ? <String>[] : auth.linkedEmployeeIds;
+    final fromStr = _fromDate != null ? _fmtDate(_fromDate!) : null;
+    final toStr = _toDate != null ? _fmtDate(_toDate!) : null;
     var list = _items.where((i) {
       if (!auth.isAdmin && linkedIds.isNotEmpty) {
         final empId = i['employee'] is Map
@@ -157,6 +162,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             : i['employee']?.toString();
         if (!linkedIds.contains(empId)) return false;
       }
+      // date-range filter using the date column's date part
+      final dp = _datePart((i['date'] ?? '').toString());
+      if (fromStr != null && dp.compareTo(fromStr) < 0) return false;
+      if (toStr != null && dp.compareTo(toStr) > 0) return false;
       if (_search.isEmpty) return true;
       final q = _search.toLowerCase();
       return (i['employee']?['name'] ?? '')
@@ -685,7 +694,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _buildRow(Map item, int index) {
     final date = item['date'] != null
         ? DateFormat('dd MMM yyyy')
-            .format(DateTime.parse(item['date']).toLocal())
+            .format(DateTime.parse(_datePart(item['date'] as String)))
         : '—';
     final isPresent = item['isPresent'] == true;
     final presentHrs = isPresent ? 8 : 0;
@@ -798,7 +807,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Widget _mobileCard(Map item) {
     final date = item['date'] != null
         ? DateFormat('dd MMM yyyy')
-            .format(DateTime.parse(item['date']).toLocal())
+            .format(DateTime.parse(_datePart(item['date'] as String)))
         : '—';
     final isPresent = item['isPresent'] == true;
     final presentHrs = isPresent ? 8 : 0;
@@ -937,7 +946,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
   final _remarksCtrl = TextEditingController();
   final _otHoursCtrl = TextEditingController();
   final _hourRateCtrl = TextEditingController();
-  DateTime _date = DateTime.now();
+  DateTime _date = DateTime.now().subtract(const Duration(days: 1));
   bool _saving = false;
   bool _isPresent = true;
   bool _otEnabled = false;
@@ -1029,7 +1038,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
     final body = {
       'employee': _employeeId,
       'branch': _branchId,
-      'date': _date.toIso8601String(),
+      'date': DateTime(_date.year, _date.month, _date.day).toIso8601String(),
       'isPresent': _isPresent,
       'otEnabled': _otEnabled,
       'otHours':
