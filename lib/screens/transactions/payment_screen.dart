@@ -919,6 +919,26 @@ class _PaymentScreenState extends State<PaymentScreen>
 
     final anyOutstanding = laborOut > 0 || transportOut > 0 || expenseOut > 0;
 
+    // Total = prevOutstanding + earnings for all labor items this week
+    double computeLaborPrevOut() {
+      final seen = <String>{};
+      double total = 0;
+      for (final p in items
+          .where((e) => (e['category'] ?? 'expense') == 'labor')
+          .cast<Map>()) {
+        final key =
+            p['employee']?['_id']?.toString() ?? p['partyName'] ?? '';
+        if (seen.add(key)) {
+          total += ((p['previousOutstanding'] ?? 0) as num).toDouble();
+        }
+      }
+      return total;
+    }
+    final weekLaborEarnings = items
+        .where((e) => (e['category'] ?? 'expense') == 'labor')
+        .fold(0.0, (s, e) => s + ((e['earnings'] ?? 0) as num).toDouble());
+    final weekLaborTotal = computeLaborPrevOut() + weekLaborEarnings;
+
     final weekCards = _buildWeekCards(items, weekEnd);
     final isWeekExpanded = !_collapsedWeeks.contains(weekKey);
     final borderClr = isCurrent ? const Color(0xFFFBBF24) : const Color(0xFF475569);
@@ -990,11 +1010,19 @@ class _PaymentScreenState extends State<PaymentScreen>
                     ),
                   ],
                   const Spacer(),
-                  Text('₹${fmt.format(totalPaid)} paid',
-                      style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('₹${fmt.format(totalPaid)} paid',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                    if (weekLaborTotal > 0)
+                      Text('Total ₹${fmt.format(weekLaborTotal)}',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.85))),
+                  ]),
                   const SizedBox(width: 6),
                   Icon(
                       isWeekExpanded
@@ -1228,6 +1256,11 @@ class _PaymentScreenState extends State<PaymentScreen>
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                                 color: _payRed)),
+                        Text('Total ₹${fmt.format(prevOutstanding + totalEarnings)}',
+                            style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0891B2))),
                         Text('${sorted.length} payments',
                             style: const TextStyle(
                                 fontSize: 10, color: Color(0xFF9CA3AF))),
@@ -1466,6 +1499,12 @@ class _PaymentScreenState extends State<PaymentScreen>
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
                               color: _payRed)),
+                      if (isLabor && hasPeriod)
+                        Text('Total ₹${fmt.format(prevOutstanding + earnings)}',
+                            style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF0891B2))),
                       const SizedBox(height: 2),
                       Row(children: [
                         const Icon(Icons.calendar_today_outlined,
