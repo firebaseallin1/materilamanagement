@@ -946,7 +946,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
   final _remarksCtrl = TextEditingController();
   final _otHoursCtrl = TextEditingController();
   final _hourRateCtrl = TextEditingController();
-  DateTime _date = DateTime.now().subtract(const Duration(days: 1));
+  DateTime _date = DateTime.now();
   bool _saving = false;
   bool _isPresent = true;
   bool _otEnabled = false;

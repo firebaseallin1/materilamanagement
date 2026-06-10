@@ -36,7 +36,7 @@ class _AttReportView extends StatefulWidget {
 }
 
 class _AttReportViewState extends State<_AttReportView> {
-  List _items = [], _branches = [], _payments = [];
+  List _items = [], _branches = [], _payments = [], _summary = [];
   bool _loading = false;
   late DateTime _from, _to;
   String? _branchId, _filterEmployeeId;
@@ -74,17 +74,24 @@ class _AttReportViewState extends State<_AttReportView> {
     };
     if (_branchId != null) params['branch'] = _branchId!;
     if (_filterEmployeeId != null) params['employee'] = _filterEmployeeId!;
+    // Fetch all labour payments without date filter; period-based filtering
+    // is done client-side in _periodPayments so that payments recorded after
+    // the period end (e.g. paying last week's wages today) are still captured.
     final payParams = <String, String>{
-      'from': fromStr,
-      'to': '${toStr}T23:59:59',
       'category': 'labor',
       'type': 'paid',
       'limit': '5000',
     };
     if (_branchId != null) payParams['branch'] = _branchId!;
+    final summaryParams = <String, String>{
+      'from': fromStr,
+      'to': '${toStr}T23:59:59',
+    };
+    if (_branchId != null) summaryParams['branch'] = _branchId!;
     final results = await Future.wait([
       ApiService.get('/attendance', params: params),
       ApiService.get('/payments', params: payParams),
+      ApiService.get('/attendance/summary', params: summaryParams),
     ]);
     if (!mounted) return;
     final all = List.from(results[0]['data'] ?? []);
@@ -97,6 +104,7 @@ class _AttReportViewState extends State<_AttReportView> {
     setState(() {
       _items = filtered;
       _payments = List.from(results[1]['data'] ?? []);
+      _summary = List.from(results[2]['data'] ?? []);
       _loading = false;
     });
   }
@@ -510,24 +518,101 @@ class _AttReportViewState extends State<_AttReportView> {
 
   // ── Ledger PDF (Earnings vs Payments) ────────────────────────────────────
 
-  /// Per-employee payment totals from _payments list
+  /// Labour payments whose period (periodFrom) falls within the selected range.
+  /// Falls back to the payment date when periodFrom is absent.
+  /// Dates are parsed and converted to local time to avoid UTC offset mismatches.
+  List get _periodPayments {
+    final fromDate = DateTime(_from.year, _from.month, _from.day);
+    final toDate   = DateTime(_to.year, _to.month, _to.day, 23, 59, 59);
+    return _payments.where((p) {
+      final periodStr = (p['periodFrom'] as String?) ?? (p['date'] as String?);
+      if (periodStr == null || periodStr.isEmpty) return true;
+      try {
+        final d = DateTime.parse(periodStr).toLocal();
+        final localDate = DateTime(d.year, d.month, d.day);
+        return !localDate.isBefore(fromDate) && !localDate.isAfter(toDate);
+      } catch (_) {
+        return true;
+      }
+    }).toList();
+  }
+
+  /// Per-employee payment totals — only payments that carry an employee link.
   Map<String, double> get _empPayments {
     final map = <String, double>{};
-    for (final p in _payments) {
+    for (final p in _periodPayments) {
       final empId = (p['employee'] is Map
               ? p['employee']['_id']
               : p['employee'])
           ?.toString();
-      if (empId == null) continue;
-      final amt = (p['amount'] ?? 0).toDouble();
-      map[empId] = (map[empId] ?? 0) + amt;
+      if (empId == null || empId.isEmpty) continue;
+      map[empId] = (map[empId] ?? 0) + (p['amount'] ?? 0).toDouble();
+    }
+    return map;
+  }
+
+  /// Grand total paid out — sum of ALL outgoing labour payments in the period
+  /// (including combined records that have no per-employee link).
+  double get _totalPeriodPaid =>
+      _periodPayments.fold(0.0, (s, p) => s + (p['amount'] ?? 0).toDouble());
+
+  /// Per-employee outstanding from summary endpoint
+  /// { empId: { name, code, photo, earnings, previousOutstanding } }
+  Map<String, Map<String, dynamic>> get _empSummaryLedger {
+    final map = <String, Map<String, dynamic>>{};
+    for (final s in _summary) {
+      final id = s['_id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      map[id] = {
+        'name': s['name'] ?? '—',
+        'code': s['empCode'] ?? '',
+        'photo': s['photo'] ?? '',
+        'earnings': (s['earnings'] ?? 0).toDouble(),
+        'previousOutstanding': (s['previousOutstanding'] ?? 0).toDouble(),
+      };
     }
     return map;
   }
 
   Future<void> _generateLedgerPdf() async {
-    final summary = _empSummary;
-    final payments = _empPayments;
+    // Build per-employee ledger rows from summary + payments
+    final ledger = _empSummaryLedger; // from /attendance/summary
+    final attSummary = _empSummary;   // from attendance records (for present/absent)
+    final payments = _empPayments;    // per-employee payments (where employee link exists)
+    final totalPaidOut = _totalPeriodPaid; // overall paid from payment table (all labour outgoing)
+    final sortedAtt  = _sortedItems;
+    final periodPays = _periodPayments;
+
+    // Unified employee list — summary endpoint first, then attendance fallback
+    final rows = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final e in ledger.entries) {
+      seen.add(e.key);
+      final att = attSummary[e.key];
+      rows.add({
+        'id': e.key,
+        'name': e.value['name'],
+        'code': e.value['code'],
+        'prevOutstanding': e.value['previousOutstanding'] as double,
+        'earnings': e.value['earnings'] as double,
+        'presentDays': att?['presentDays'] ?? 0,
+        'absentDays': att?['absentDays'] ?? 0,
+      });
+    }
+    // Employees only in attendance (no summary entry)
+    for (final e in attSummary.entries) {
+      if (seen.contains(e.key)) continue;
+      rows.add({
+        'id': e.key,
+        'name': e.value['name'],
+        'code': e.value['code'],
+        'prevOutstanding': 0.0,
+        'earnings': e.value['earnings'] as double,
+        'presentDays': e.value['presentDays'],
+        'absentDays': e.value['absentDays'],
+      });
+    }
+    rows.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
 
     showDialog(
       context: context,
@@ -563,6 +648,7 @@ class _AttReportViewState extends State<_AttReportView> {
       final green = PdfColor.fromHex('16A34A');
       final red = PdfColor.fromHex('DC2626');
       final blue = PdfColor.fromHex('2563EB');
+      final amber = PdfColor.fromHex('D97706');
       final grey = PdfColor.fromHex('6B7280');
       final border = PdfColor.fromHex('E5E7EB');
       final rowAlt = PdfColor.fromHex('FAFAFA');
@@ -583,8 +669,196 @@ class _AttReportViewState extends State<_AttReportView> {
                   textAlign: a,
                   style: pw.TextStyle(font: f, fontSize: 8, color: c)));
 
-      double totalEarnings = 0, totalPaid = 0;
-      final rows = summary.entries.toList();
+      // Pre-compute totals — Paid Out comes from the payment table overall total,
+      // not per-employee sums, because labour payments are saved as one combined record.
+      double sumPrevOut = 0, sumEarnings = 0, sumTotalDue = 0;
+      for (final r in rows) {
+        final prev = r['prevOutstanding'] as double;
+        final earn = r['earnings'] as double;
+        sumPrevOut += prev;
+        sumEarnings += earn;
+        sumTotalDue += prev + earn;
+      }
+      final sumPaid    = totalPaidOut;
+      final sumBalance = sumTotalDue - totalPaidOut;
+
+      // ── Build CR / DR transaction widgets ────────────────────────────────
+      final crdrFrom = DateFormat('yyyy-MM-dd').format(_from);
+
+      // Index attendance by employee
+      final Map<String, List<Map<String, dynamic>>> empAttIdx = {};
+      for (final item in sortedAtt) {
+        final emp = item['employee'] is Map ? item['employee'] as Map : {};
+        final eid = emp['_id']?.toString() ?? '';
+        if (eid.isEmpty) continue;
+        empAttIdx.putIfAbsent(eid, () => []).add(Map<String, dynamic>.from(item));
+      }
+
+      // Index payments by employee
+      final Map<String, List<Map<String, dynamic>>> empPayIdx = {};
+      for (final p in periodPays) {
+        final eid = (p['employee'] is Map
+                ? (p['employee'] as Map)['_id']
+                : p['employee'])
+            ?.toString();
+        if (eid == null) continue;
+        empPayIdx.putIfAbsent(eid, () => []).add(Map<String, dynamic>.from(p as Map));
+      }
+
+      final crdrWidgets = <pw.Widget>[];
+      for (final r in rows) {
+        final empId    = r['id'] as String;
+        final code     = r['code'] as String;
+        final empLabel = '${r['name']}${code.isNotEmpty ? ' ($code)' : ''}';
+        final prevOut  = r['prevOutstanding'] as double;
+
+        final attList = List<Map<String, dynamic>>.from(empAttIdx[empId] ?? [])
+          ..sort((a, b) => (a['date'] ?? '').toString().compareTo((b['date'] ?? '').toString()));
+        final payList = List<Map<String, dynamic>>.from(empPayIdx[empId] ?? [])
+          ..sort((a, b) => (a['date'] ?? '').toString().compareTo((b['date'] ?? '').toString()));
+
+        if (attList.isEmpty && payList.isEmpty && prevOut == 0) continue;
+
+        // Build unified transaction list
+        final txList = <Map<String, dynamic>>[];
+        for (final att in attList) {
+          final present = att['isPresent'] == true;
+          final ot   = (att['otHours'] ?? 0).toDouble();
+          final rate = (att['hourRate'] ?? 0).toDouble();
+          final earn = (present ? 8.0 : 0.0) * rate + ot * rate;
+          txList.add({
+            'date': (att['date'] as String).substring(0, 10),
+            'desc': present
+                ? (ot > 0 ? 'Present + OT ${ot.toStringAsFixed(1)}h' : 'Present (8h)')
+                : 'Absent',
+            'dr': earn,
+            'cr': 0.0,
+          });
+        }
+        for (final pay in payList) {
+          final pd   = (pay['date'] as String?)?.substring(0, 10) ?? crdrFrom;
+          final mode = (pay['paymentMode'] ?? 'Cash').toString();
+          txList.add({
+            'date': pd,
+            'desc': 'Payment (${mode[0].toUpperCase()}${mode.substring(1).toLowerCase()})',
+            'dr':   0.0,
+            'cr':   (pay['amount'] ?? 0).toDouble(),
+          });
+        }
+        txList.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
+
+        double runBal  = prevOut;
+        double totalDr = prevOut;
+        double totalCr = 0.0;
+        final txRows = <pw.TableRow>[];
+
+        // Table header
+        txRows.add(pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColor.fromHex('374151')),
+          children: [
+            for (final h in ['Date', 'Particulars', 'DR (₹)', 'CR (₹)', 'Balance (₹)'])
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                child: pw.Text(h,
+                    textAlign: h == 'Date' || h == 'Particulars'
+                        ? pw.TextAlign.left
+                        : pw.TextAlign.right,
+                    style: pw.TextStyle(
+                        font: fontB, fontSize: 7.5, color: PdfColors.white)),
+              ),
+          ],
+        ));
+
+        // Opening balance row
+        if (prevOut > 0) {
+          txRows.add(pw.TableRow(
+            decoration: pw.BoxDecoration(color: PdfColor.fromHex('FFFBEB')),
+            children: [
+              cell('—', fontR, amber, a: pw.TextAlign.center),
+              cell('Opening Balance b/f', fontR, amber),
+              cell(_amtFmt.format(prevOut), fontR, amber, a: pw.TextAlign.right),
+              cell('—', fontR, grey, a: pw.TextAlign.right),
+              cell(_amtFmt.format(runBal), fontB, amber, a: pw.TextAlign.right),
+            ],
+          ));
+        }
+
+        // Transaction rows
+        for (int ti = 0; ti < txList.length; ti++) {
+          final tx   = txList[ti];
+          final dr   = tx['dr'] as double;
+          final cr   = tx['cr'] as double;
+          runBal    = runBal + dr - cr;
+          totalDr  += dr;
+          totalCr  += cr;
+          final isDr = dr > 0;
+          txRows.add(pw.TableRow(
+            decoration: pw.BoxDecoration(
+              color: ti.isEven
+                  ? (isDr
+                      ? PdfColor.fromHex('F9FAFB')
+                      : PdfColor.fromHex('EFF6FF'))
+                  : PdfColors.white,
+            ),
+            children: [
+              cell(
+                  (dr > 0 || cr > 0)
+                      ? _dateFmt.format(DateTime.parse(tx['date'] as String))
+                      : '—',
+                  fontR, grey, a: pw.TextAlign.center),
+              cell(tx['desc'] as String, fontR, isDr ? dkGreen : blue),
+              cell(dr > 0 ? _amtFmt.format(dr) : '—', fontR,
+                  isDr ? green : grey, a: pw.TextAlign.right),
+              cell(cr > 0 ? _amtFmt.format(cr) : '—', fontR,
+                  !isDr ? red : grey, a: pw.TextAlign.right),
+              cell(_amtFmt.format(runBal), fontB,
+                  runBal > 0 ? dkGreen : PdfColor.fromHex('059669'),
+                  a: pw.TextAlign.right),
+            ],
+          ));
+        }
+
+        // Closing balance row
+        txRows.add(pw.TableRow(
+          decoration: pw.BoxDecoration(color: bgG),
+          children: [
+            cell('', fontB, grey),
+            cell('Closing Balance', fontB, dkGreen),
+            cell(_amtFmt.format(totalDr), fontB, green, a: pw.TextAlign.right),
+            cell(_amtFmt.format(totalCr), fontB, red, a: pw.TextAlign.right),
+            cell(_amtFmt.format(runBal), fontB,
+                runBal > 0 ? red : green, a: pw.TextAlign.right),
+          ],
+        ));
+
+        crdrWidgets.add(pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 12),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Container(
+                color: PdfColor.fromHex('1F2937'),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                child: pw.Text(empLabel,
+                    style: pw.TextStyle(
+                        font: fontB, fontSize: 8.5, color: PdfColors.white)),
+              ),
+              pw.Table(
+                border: pw.TableBorder.all(color: border, width: 0.5),
+                columnWidths: const {
+                  0: pw.FixedColumnWidth(55),
+                  1: pw.FlexColumnWidth(2.5),
+                  2: pw.FixedColumnWidth(72),
+                  3: pw.FixedColumnWidth(72),
+                  4: pw.FixedColumnWidth(72),
+                },
+                children: txRows,
+              ),
+            ],
+          ),
+        ));
+      }
+      // ── End CR / DR ───────────────────────────────────────────────────────
 
       final pdf = pw.Document();
       pdf.addPage(pw.MultiPage(
@@ -596,8 +870,7 @@ class _AttReportViewState extends State<_AttReportView> {
           pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
                       if (logo != null) ...[
                         pw.Image(logo, width: 36, height: 36),
@@ -614,8 +887,7 @@ class _AttReportViewState extends State<_AttReportView> {
                                     font: fontR, fontSize: 7, color: grey)),
                           ]),
                     ]),
-                pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Text('EMPLOYEE LEDGER STATEMENT',
                           style: pw.TextStyle(
@@ -635,151 +907,148 @@ class _AttReportViewState extends State<_AttReportView> {
         footer: (ctx) => pw.Column(children: [
           pw.Divider(color: border, thickness: 0.5),
           pw.SizedBox(height: 3),
-          pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text('Generated by ${CompanyInfo.name}',
                     style: pw.TextStyle(
-                        font: fontR,
-                        fontSize: 7,
+                        font: fontR, fontSize: 7,
                         color: PdfColor.fromHex('9CA3AF'))),
                 pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
                     style: pw.TextStyle(
-                        font: fontR,
-                        fontSize: 7,
+                        font: fontR, fontSize: 7,
                         color: PdfColor.fromHex('9CA3AF'))),
               ]),
         ]),
-        build: (_) {
-          // compute totals
-          for (final e in rows) {
-            totalEarnings += e.value['earnings'] as double;
-            totalPaid += payments[e.key] ?? 0;
-          }
-          final totalBalance = totalEarnings - totalPaid;
-
-          return [
-            // Summary boxes
-            pw.Container(
-              padding: const pw.EdgeInsets.all(10),
-              decoration: pw.BoxDecoration(
-                  color: bgG,
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(6)),
-                  border: pw.Border.all(color: border, width: 0.5)),
-              child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+        build: (_) => [
+          // Summary boxes
+          pw.Container(
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+                color: bgG,
+                borderRadius:
+                    const pw.BorderRadius.all(pw.Radius.circular(6)),
+                border: pw.Border.all(color: border, width: 0.5)),
+            child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                children: [
+                  _pdfStat('Prev Outstanding',
+                      '₹${_amtFmt.format(sumPrevOut)}', amber, fontR, fontB),
+                  _pdfDiv(),
+                  _pdfStat('This Period Earnings',
+                      '₹${_amtFmt.format(sumEarnings)}', green, fontR, fontB),
+                  _pdfDiv(),
+                  _pdfStat('Total Due',
+                      '₹${_amtFmt.format(sumTotalDue)}', dkGreen, fontR, fontB),
+                  _pdfDiv(),
+                  _pdfStat('Paid Out',
+                      '₹${_amtFmt.format(sumPaid)}', blue, fontR, fontB),
+                  _pdfDiv(),
+                  _pdfStat('Balance',
+                      '₹${_amtFmt.format(sumBalance.abs())}',
+                      sumBalance > 0 ? red : green, fontR, fontB),
+                ]),
+          ),
+          pw.SizedBox(height: 14),
+          pw.Text('EMPLOYEE BALANCE LEDGER',
+              style: pw.TextStyle(
+                  font: fontB, fontSize: 9, color: dkGreen,
+                  letterSpacing: 0.4)),
+          pw.SizedBox(height: 6),
+          pw.Table(
+            border: pw.TableBorder.all(color: border, width: 0.5),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(2.2),
+              1: pw.FixedColumnWidth(55),
+              2: pw.FixedColumnWidth(65),
+              3: pw.FixedColumnWidth(65),
+              4: pw.FixedColumnWidth(65),
+              5: pw.FixedColumnWidth(65),
+            },
+            children: [
+              pw.TableRow(
+                  decoration: pw.BoxDecoration(color: dkGreen),
                   children: [
-                    _pdfStat('Total Earnings', '₹${_amtFmt.format(totalEarnings)}',
-                        green, fontR, fontB),
-                    _pdfDiv(),
-                    _pdfStat('Total Paid', '₹${_amtFmt.format(totalPaid)}',
-                        blue, fontR, fontB),
-                    _pdfDiv(),
-                    _pdfStat(
-                        'Balance Due',
-                        '₹${_amtFmt.format(totalBalance.abs())}',
-                        totalBalance > 0 ? red : green,
-                        fontR,
-                        fontB),
+                    for (final h in [
+                      'Employee',
+                      'Days',
+                      'Prev Bal (₹)',
+                      'Earnings (₹)',
+                      'Paid (₹)',
+                      'Balance (₹)',
+                    ])
+                      pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 4),
+                          child: pw.Text(h,
+                              style: pw.TextStyle(
+                                  font: fontB,
+                                  fontSize: 7.5,
+                                  color: PdfColors.white))),
                   ]),
-            ),
-            pw.SizedBox(height: 14),
-            pw.Text('EMPLOYEE BALANCE STATEMENT',
+              ...rows.asMap().entries.map((en) {
+                final i = en.key;
+                final r = en.value;
+                final empId = r['id'] as String;
+                final prev = r['prevOutstanding'] as double;
+                final earn = r['earnings'] as double;
+                final paid = payments[empId] ?? 0.0;
+                final balance = (prev + earn) - paid;
+                final code = r['code'] as String;
+                return pw.TableRow(
+                  decoration: pw.BoxDecoration(
+                      color: i.isEven ? PdfColors.white : rowAlt),
+                  children: [
+                    cell('${r['name']}${code.isNotEmpty ? ' ($code)' : ''}',
+                        fontB, dkGreen),
+                    cell('${r['presentDays']}d / ${r['absentDays']}a',
+                        fontR, grey, a: pw.TextAlign.center),
+                    cell(_amtFmt.format(prev), fontR, amber,
+                        a: pw.TextAlign.right),
+                    cell(_amtFmt.format(earn), fontR, green,
+                        a: pw.TextAlign.right),
+                    cell(_amtFmt.format(paid), fontR, blue,
+                        a: pw.TextAlign.right),
+                    cell(_amtFmt.format(balance.abs()), fontB,
+                        balance > 0 ? red : green,
+                        a: pw.TextAlign.right),
+                  ],
+                );
+              }),
+              pw.TableRow(
+                  decoration: pw.BoxDecoration(color: bgG),
+                  children: [
+                    cell('TOTAL', fontB, dkGreen),
+                    cell('', fontB, grey),
+                    cell(_amtFmt.format(sumPrevOut), fontB, amber,
+                        a: pw.TextAlign.right),
+                    cell(_amtFmt.format(sumEarnings), fontB, green,
+                        a: pw.TextAlign.right),
+                    cell(_amtFmt.format(sumPaid), fontB, blue,
+                        a: pw.TextAlign.right),
+                    cell(_amtFmt.format(sumBalance.abs()), fontB,
+                        sumBalance > 0 ? red : green,
+                        a: pw.TextAlign.right),
+                  ]),
+            ],
+          ),
+          if (crdrWidgets.isNotEmpty) ...[
+            pw.SizedBox(height: 16),
+            pw.Text('LEDGER TRANSACTIONS (CR / DR)',
                 style: pw.TextStyle(
                     font: fontB,
                     fontSize: 9,
                     color: dkGreen,
                     letterSpacing: 0.4)),
             pw.SizedBox(height: 6),
-            pw.Table(
-              border: pw.TableBorder.all(color: border, width: 0.5),
-              columnWidths: const {
-                0: pw.FlexColumnWidth(2.5),
-                1: pw.FixedColumnWidth(45),
-                2: pw.FixedColumnWidth(45),
-                3: pw.FixedColumnWidth(80),
-                4: pw.FixedColumnWidth(80),
-                5: pw.FixedColumnWidth(80),
-              },
-              children: [
-                pw.TableRow(
-                    decoration: pw.BoxDecoration(color: dkGreen),
-                    children: [
-                      for (final h in [
-                        'Employee',
-                        'Present',
-                        'Absent',
-                        'Earnings (₹)',
-                        'Paid (₹)',
-                        'Balance (₹)',
-                      ])
-                        pw.Padding(
-                            padding: const pw.EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 4),
-                            child: pw.Text(h,
-                                style: pw.TextStyle(
-                                    font: fontB,
-                                    fontSize: 7.5,
-                                    color: PdfColors.white))),
-                    ]),
-                ...rows.asMap().entries.map((en) {
-                  final i = en.key;
-                  final s = en.value.value;
-                  final empId = en.value.key;
-                  final earned = s['earnings'] as double;
-                  final paid = payments[empId] ?? 0.0;
-                  final balance = earned - paid;
-                  return pw.TableRow(
-                    decoration: pw.BoxDecoration(
-                        color: i.isEven ? PdfColors.white : rowAlt),
-                    children: [
-                      cell(
-                          '${s['name']}${(s['code'] as String).isNotEmpty ? ' (${s['code']})' : ''}',
-                          fontB,
-                          dkGreen),
-                      cell('${s['presentDays']}', fontR, green,
-                          a: pw.TextAlign.center),
-                      cell('${s['absentDays']}', fontR, red,
-                          a: pw.TextAlign.center),
-                      cell(_amtFmt.format(earned), fontR, dkGreen,
-                          a: pw.TextAlign.right),
-                      cell(_amtFmt.format(paid), fontR, blue,
-                          a: pw.TextAlign.right),
-                      cell(_amtFmt.format(balance.abs()), fontB,
-                          balance > 0 ? red : green,
-                          a: pw.TextAlign.right),
-                    ],
-                  );
-                }),
-                // Totals row
-                pw.TableRow(
-                    decoration: pw.BoxDecoration(color: bgG),
-                    children: [
-                      cell('TOTAL', fontB, dkGreen),
-                      cell('$_totalPresent', fontB, green,
-                          a: pw.TextAlign.center),
-                      cell('$_totalAbsent', fontB, red,
-                          a: pw.TextAlign.center),
-                      cell(_amtFmt.format(totalEarnings), fontB, dkGreen,
-                          a: pw.TextAlign.right),
-                      cell(_amtFmt.format(totalPaid), fontB, blue,
-                          a: pw.TextAlign.right),
-                      cell(_amtFmt.format(totalBalance.abs()), fontB,
-                          totalBalance > 0 ? red : green,
-                          a: pw.TextAlign.right),
-                    ]),
-              ],
-            ),
-          ];
-        },
+            ...crdrWidgets,
+          ],
+        ],
       ));
 
       if (mounted) Navigator.of(context).pop();
       await Printing.layoutPdf(
         onLayout: (_) async => pdf.save(),
-        name:
-            'LedgerReport_${DateFormat('ddMMyyyy').format(_from)}.pdf',
+        name: 'LedgerReport_${DateFormat('ddMMyyyy').format(_from)}.pdf',
       );
     } catch (e) {
       if (mounted) {
@@ -814,7 +1083,24 @@ class _AttReportViewState extends State<_AttReportView> {
           _statChip(
               'Earnings', '₹${_amtFmt.format(_totalEarnings)}', _atPrimary,
               bold: true),
+          const SizedBox(width: 14),
+          _statChip(
+              'Paid Out', '₹${_amtFmt.format(_totalPeriodPaid)}',
+              const Color(0xFF2563EB),
+              bold: true),
           const Spacer(),
+          IconButton(
+            onPressed: _loading ? null : _load,
+            icon: _loading
+                ? const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _atGreen))
+                : const Icon(Icons.refresh_rounded, size: 20, color: _atGreen),
+            tooltip: 'Refresh',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+          const SizedBox(width: 4),
           ElevatedButton.icon(
             onPressed: _loading ? null : _generateLedgerPdf,
             icon: const Icon(Icons.account_balance_wallet_outlined, size: 15),

@@ -853,29 +853,31 @@ class _PaymentScreenState extends State<PaymentScreen>
   String _weekKey(String? dateStr) {
     if (dateStr == null) return '1970-01-05';
     final d = DateTime.parse(dateStr);
-    final monday = d.subtract(Duration(days: d.weekday - 1));
-    return DateFormat('yyyy-MM-dd').format(monday);
+    final daysFromSun = d.weekday % 7; // Sun=0, Mon=1, …, Sat=6
+    final sunday = d.subtract(Duration(days: daysFromSun));
+    return DateFormat('yyyy-MM-dd').format(sunday);
   }
 
   bool _isCurrentWeek(String weekKey) {
     final now = DateTime.now();
-    final thisMonday = now.subtract(Duration(days: now.weekday - 1));
-    return weekKey == DateFormat('yyyy-MM-dd').format(thisMonday);
+    final daysFromSun = now.weekday % 7;
+    final thisSunday = DateTime(now.year, now.month, now.day - daysFromSun);
+    return weekKey == DateFormat('yyyy-MM-dd').format(thisSunday);
   }
 
   DateTime _weekSunday(String weekKey) =>
       DateTime.parse(weekKey).add(const Duration(days: 6));
 
   Widget _buildWeekGroup(String weekKey, List items) {
-    final sunday = _weekSunday(weekKey);
-    final monday = DateTime.parse(weekKey);
+    final weekStart = DateTime.parse(weekKey); // Sunday
+    final weekEnd = _weekSunday(weekKey);       // Saturday
     final isCurrent = _isCurrentWeek(weekKey);
     final fmt = NumberFormat('#,##0.##');
     final totalPaid =
         items.fold(0.0, (s, e) => s + (double.tryParse('${e['amount']}') ?? 0));
     final weekLabel = isCurrent
         ? 'This Week'
-        : '${DateFormat('d MMM').format(monday)} – ${DateFormat('d MMM').format(sunday)}';
+        : '${DateFormat('d MMM').format(weekStart)} – ${DateFormat('d MMM').format(weekEnd)}';
 
     // Per-category outstanding: for each category, group by entity key and
     // take the LAST payment's thisWeekOutstanding (most recent carries the balance).
@@ -917,7 +919,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
     final anyOutstanding = laborOut > 0 || transportOut > 0 || expenseOut > 0;
 
-    final weekCards = _buildWeekCards(items, sunday);
+    final weekCards = _buildWeekCards(items, weekEnd);
     final isWeekExpanded = !_collapsedWeeks.contains(weekKey);
     final borderClr = isCurrent ? const Color(0xFFFBBF24) : const Color(0xFF475569);
 
@@ -1767,7 +1769,13 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       _category = e['category'] ?? 'expense';
       _partyCtrl.text = e['partyName'] ?? '';
       _amountCtrl.text = '${e['amount'] ?? ''}';
-      _totalDueCtrl.text = '${e['totalDue'] ?? e['amount'] ?? ''}';
+      // For Labour edit: use previousOutstanding + earnings as the total outstanding due
+      final isLaborEdit = (e['category'] == 'labor') && e['_id'] != null;
+      final earningsVal = (e['earnings'] ?? 0).toDouble();
+      final prevOutVal  = (e['previousOutstanding'] ?? 0).toDouble();
+      _totalDueCtrl.text = isLaborEdit && earningsVal > 0
+          ? (prevOutVal + earningsVal).toStringAsFixed(2)
+          : '${e['totalDue'] ?? e['amount'] ?? ''}';
       _advanceAdjCtrl.text =
           e['advanceAdjustment'] != null && e['advanceAdjustment'] != 0
               ? '${e['advanceAdjustment']}'
@@ -2644,6 +2652,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               _buildMeasurementEditSection(),
             ] else if (_isMeasurementMode && !_isEdit) ...[
               _buildMeasurementSection(),
+            ] else if (_isLaborMode && _isEdit) ...[
+              _buildLaborEditSection(),
             ] else if (_isLaborMode && !_isEdit) ...[
               _buildLaborSection(),
             ] else if (_isTransportMode && !_isEdit) ...[
@@ -3377,6 +3387,174 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
       ),
     ]);
   }
+
+  // ── Labour edit section ──────────────────────────────────────────────────────
+
+  Widget _buildLaborEditSection() {
+    final fmt = NumberFormat('#,##0.00');
+    final dfmt = DateFormat('dd MMM yyyy');
+    const color = _payPurple;
+
+    final periodFrom      = widget.item?['periodFrom'] as String?;
+    final periodTo        = widget.item?['periodTo']   as String?;
+    final presentDays     = (widget.item?['presentDays']      ?? 0) as num;
+    final earnings        = (widget.item?['earnings']          ?? 0).toDouble();
+    final prevOutstanding = (widget.item?['previousOutstanding'] ?? 0).toDouble();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Period range — read-only info
+      if (periodFrom != null && periodTo != null) ...[
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.4)),
+          ),
+          child: Row(children: [
+            const Icon(Icons.date_range_outlined, size: 16, color: color),
+            const SizedBox(width: 8),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Attendance Period',
+                  style: TextStyle(fontSize: 10, color: color)),
+              Text(
+                '${dfmt.format(DateTime.parse(periodFrom))}  –  ${dfmt.format(DateTime.parse(periodTo))}',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: color),
+              ),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 10),
+      ],
+
+      // Previous outstanding chip
+      if (prevOutstanding > 0) ...[
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBEB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFFBBF24)),
+          ),
+          child: Row(children: [
+            _infoChip(Icons.history_rounded,
+                'Prev Outstanding  ₹${fmt.format(prevOutstanding)}', _payAmber),
+          ]),
+        ),
+        const SizedBox(height: 10),
+      ],
+
+      // Attendance summary chips — read-only
+      if (presentDays > 0 || earnings > 0)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F9F4),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFD1FAE5)),
+          ),
+          child: Row(children: [
+            _infoChip(Icons.calendar_today_outlined, '$presentDays days worked',
+                _payGreen),
+            const SizedBox(width: 14),
+            _infoChip(Icons.currency_rupee_outlined,
+                'Earned ${fmt.format(earnings)}', _payGreen),
+          ]),
+        ),
+      const SizedBox(height: 14),
+
+      // Party name
+      TextFormField(
+        controller: _partyCtrl,
+        decoration: _dec('Party Name'),
+        validator: (v) => v!.isEmpty ? 'Required' : null,
+      ),
+      const SizedBox(height: 14),
+
+      // Branch
+      AppDropdown<String>(
+        label: 'Branch',
+        value: _branchId,
+        items: [
+          const DropdownMenuItem<String>(value: null, child: Text('All Branches')),
+          ..._branches.map<DropdownMenuItem<String>>((b) =>
+              DropdownMenuItem(value: b['_id'], child: Text(b['name']))),
+        ],
+        onChanged: (v) => setState(() => _branchId = v),
+      ),
+      const SizedBox(height: 14),
+
+      // Outstanding Due (editable — pre-filled with earnings)
+      TextFormField(
+        controller: _totalDueCtrl,
+        keyboardType: TextInputType.number,
+        decoration: _dec('Outstanding Due (₹)', hint: 'Total amount owed'),
+        validator: (v) => v!.isEmpty ? 'Required' : null,
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: 14),
+
+      // Paying Now
+      TextFormField(
+        controller: _amountCtrl,
+        keyboardType: TextInputType.number,
+        decoration: _dec('Paying Now (₹)'),
+        validator: (v) => v!.isEmpty ? 'Required' : null,
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: 10),
+
+      // Remaining balance live preview
+      Builder(builder: (ctx) {
+        final due = double.tryParse(_totalDueCtrl.text) ?? 0;
+        final paying = double.tryParse(_amountCtrl.text) ?? 0;
+        final remaining = due - paying;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: remaining > 0
+                ? const Color(0xFFFEF3C7)
+                : const Color(0xFFF0F9F4),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: remaining > 0
+                    ? const Color(0xFFFBBF24)
+                    : const Color(0xFFD1FAE5)),
+          ),
+          child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  remaining > 0 ? 'Outstanding Remaining' : 'Fully Paid',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color:
+                          remaining > 0 ? _payAmber : _payGreen),
+                ),
+                Text(
+                  remaining > 0
+                      ? '₹${fmt.format(remaining)}'
+                      : '₹0.00',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: remaining > 0 ? _payAmber : _payGreen),
+                ),
+              ]),
+        );
+      }),
+    ]);
+  }
+
+  Widget _infoChip(IconData icon, String label, Color color) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w500, color: color)),
+      ]);
 
   // ── Labour section ──────────────────────────────────────────────────────────
 
