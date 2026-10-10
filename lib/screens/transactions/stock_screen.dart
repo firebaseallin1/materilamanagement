@@ -837,8 +837,6 @@ class _WarehouseCardState extends State<_WarehouseCard> {
                   if (hasStore) ...[
                     _HeaderStat('Stored', totalStored, const Color(0xFF059669)),
                     const SizedBox(width: 10),
-                    _HeaderStat('In', totalMoveIn, const Color(0xFF2563EB)),
-                    const SizedBox(width: 10),
                     _HeaderStat('Out', totalMoveOut, const Color(0xFF7C3AED)),
                     const SizedBox(width: 12),
                   ] else ...[
@@ -875,11 +873,12 @@ class _WarehouseCardState extends State<_WarehouseCard> {
                   const SizedBox(
                       width: 72,
                       child: Text('STORED',
+                          style: colLabel, textAlign: TextAlign.center))
+                else
+                  const SizedBox(
+                      width: 72,
+                      child: Text('IN',
                           style: colLabel, textAlign: TextAlign.center)),
-                const SizedBox(
-                    width: 72,
-                    child: Text('IN',
-                        style: colLabel, textAlign: TextAlign.center)),
                 const SizedBox(
                     width: 72,
                     child: Text('OUT',
@@ -950,8 +949,9 @@ class _WarehouseCardState extends State<_WarehouseCard> {
                     ),
                     if (hasStore)
                       numCell(_fmt(mStore), const Color(0xFF059669),
-                          plus: true),
-                    numCell(_fmt(mIn), const Color(0xFF2563EB), plus: true),
+                          plus: true)
+                    else
+                      numCell(_fmt(mIn), const Color(0xFF2563EB), plus: true),
                     numCell(_fmt(mOut), const Color(0xFF7C3AED)),
                     SizedBox(
                       width: 88,
