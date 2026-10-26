@@ -143,13 +143,14 @@ class _AccountViewState extends State<_AccountView> {
       }
       for (final a in _advances) {
         final amt = (a['amount'] as num?)?.toDouble() ?? 0;
+        final returned = a['type'] == 'returned';
         list.add(_LedgerEntry(
           date: DateTime.parse(a['date'] as String),
-          description: 'Advance',
+          description: returned ? 'Advance Returned' : 'Advance',
           party: (a['employee'] is Map ? a['employee']['name'] : null) ?? '—',
           mode: 'cash',
           category: 'Advance',
-          credit: 0, debit: amt,
+          credit: returned ? amt : 0, debit: returned ? 0 : amt,
         ));
       }
     }

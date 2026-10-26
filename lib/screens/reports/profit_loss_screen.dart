@@ -103,7 +103,8 @@ class _PLViewState extends State<_PLView> {
     // Advances
     double advTotal = 0;
     for (final a in _advances) {
-      advTotal += (a['amount'] as num?)?.toDouble() ?? 0;
+      final amt = (a['amount'] as num?)?.toDouble() ?? 0;
+      advTotal += a['type'] == 'returned' ? -amt : amt;
     }
     if (advTotal > 0) map['Advances'] = (map['Advances'] ?? 0) + advTotal;
     return map;

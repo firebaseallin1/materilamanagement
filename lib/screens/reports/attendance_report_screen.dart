@@ -1120,10 +1120,12 @@ class _AttReportViewState extends State<_AttReportView> {
           _statChip('Absent', '$_totalAbsent days', const Color(0xFFDC2626)),
           const SizedBox(width: 14),
           _statChip('OT', '${_totalOt.toStringAsFixed(1)} hrs', _atPurple),
-          const SizedBox(width: 14),
-          _statChip(
-              'Earnings', '₹${_amtFmt.format(_totalEarnings)}', _atPrimary,
-              bold: true),
+          if (_isAdmin) ...[
+            const SizedBox(width: 14),
+            _statChip(
+                'Earnings', '₹${_amtFmt.format(_totalEarnings)}', _atPrimary,
+                bold: true),
+          ],
           if (!_userMode) ...[
             const SizedBox(width: 14),
             _statChip(
@@ -1160,6 +1162,8 @@ class _AttReportViewState extends State<_AttReportView> {
             ),
           ),
           ],
+          // The PDF lists rates and earnings, so it is admin-only
+          if (_isAdmin) ...[
           const SizedBox(width: 8),
           ElevatedButton.icon(
             onPressed: _loading ? null : _generatePdf,
@@ -1175,6 +1179,7 @@ class _AttReportViewState extends State<_AttReportView> {
                   borderRadius: BorderRadius.circular(8)),
             ),
           ),
+          ],
         ]),
       ),
       const Divider(height: 1, color: _atBorder),
@@ -1516,10 +1521,11 @@ class _AttReportViewState extends State<_AttReportView> {
                               'OT',
                               '${(s['otHours'] as double).toStringAsFixed(1)}h',
                               _atPurple),
-                          _miniStat(
-                              '₹',
-                              _amtFmt.format(s['earnings'] as double),
-                              _atPrimary),
+                          if (_isAdmin)
+                            _miniStat(
+                                '₹',
+                                _amtFmt.format(s['earnings'] as double),
+                                _atPrimary),
                         ]),
                   ]),
             )),
@@ -1531,26 +1537,30 @@ class _AttReportViewState extends State<_AttReportView> {
     const hdr = TextStyle(
         fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280));
     final rows = _sortedItems;
+    final isAdmin = _isAdmin;
     return Column(children: [
       Container(
         color: const Color(0xFFF9FAFB),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: const Row(children: [
-          SizedBox(width: 82, child: Text('Date', style: hdr)),
-          Expanded(flex: 2, child: Text('Employee', style: hdr)),
-          Expanded(flex: 2, child: Text('Branch', style: hdr)),
-          SizedBox(
+        child: Row(children: [
+          const SizedBox(width: 82, child: Text('Date', style: hdr)),
+          const Expanded(flex: 2, child: Text('Employee', style: hdr)),
+          const Expanded(flex: 2, child: Text('Branch', style: hdr)),
+          const SizedBox(
               width: 70,
               child: Text('Status', style: hdr, textAlign: TextAlign.center)),
-          SizedBox(
+          const SizedBox(
               width: 60,
               child: Text('OT Hrs', style: hdr, textAlign: TextAlign.center)),
-          SizedBox(
-              width: 75,
-              child: Text('Rate', style: hdr, textAlign: TextAlign.right)),
-          SizedBox(
-              width: 85,
-              child: Text('Earnings', style: hdr, textAlign: TextAlign.right)),
+          if (isAdmin) ...const [
+            SizedBox(
+                width: 75,
+                child: Text('Rate', style: hdr, textAlign: TextAlign.right)),
+            SizedBox(
+                width: 85,
+                child:
+                    Text('Earnings', style: hdr, textAlign: TextAlign.right)),
+          ],
         ]),
       ),
       const Divider(height: 1, color: _atBorder),
@@ -1602,6 +1612,7 @@ class _AttReportViewState extends State<_AttReportView> {
                             color: ot > 0 ? _atPurple : const Color(0xFFD1D5DB),
                             fontWeight:
                                 ot > 0 ? FontWeight.w600 : FontWeight.normal))),
+                if (isAdmin) ...[
                 SizedBox(
                     width: 75,
                     child: Text(rate > 0 ? '₹${_amtFmt.format(rate)}' : '—',
@@ -1618,6 +1629,7 @@ class _AttReportViewState extends State<_AttReportView> {
                             color: earn > 0
                                 ? _atPrimary
                                 : const Color(0xFFD1D5DB)))),
+                ],
               ]),
             );
           },
@@ -1657,7 +1669,7 @@ class _AttReportViewState extends State<_AttReportView> {
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           _statusBadge(present),
-          if (earn > 0) ...[
+          if (earn > 0 && _isAdmin) ...[
             const SizedBox(height: 4),
             Text('₹${_amtFmt.format(earn)}',
                 style: const TextStyle(
@@ -1756,6 +1768,15 @@ class _AttReportViewState extends State<_AttReportView> {
               _load();
             },
           ),
+        // Users only see the current week — no date picking
+        if (!_isAdmin)
+          _dateChip(
+              'This Week',
+              null,
+              null,
+              text:
+                  '${DateFormat('dd MMM').format(_from)} – ${DateFormat('dd MMM yy').format(_to)}'),
+        if (_isAdmin) ...[
         _dateChip('From', _from, () async {
           final now = DateTime.now();
           final p = await showDatePicker(
@@ -1789,6 +1810,7 @@ class _AttReportViewState extends State<_AttReportView> {
             _load();
           }
         }),
+        ],
         DropdownButton<String?>(
           value: _branchId,
           hint: const Text('All Branches', style: TextStyle(fontSize: 13)),
@@ -1816,6 +1838,7 @@ class _AttReportViewState extends State<_AttReportView> {
           ],
           onChanged: (v) => setState(() => _labourType = v),
         ),
+        if (_isAdmin) ...[
         _quickBtn('This Week', () {
           final now = DateTime.now();
           final sun = now.weekday % 7;
@@ -1833,11 +1856,14 @@ class _AttReportViewState extends State<_AttReportView> {
           });
           _load();
         }),
+        ],
       ]),
     );
   }
 
-  Widget _dateChip(String label, DateTime date, VoidCallback onTap) => InkWell(
+  Widget _dateChip(String label, DateTime? date, VoidCallback? onTap,
+          {String? text}) =>
+      InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
@@ -1849,7 +1875,7 @@ class _AttReportViewState extends State<_AttReportView> {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.calendar_today_outlined, size: 14, color: _atGreen),
           const SizedBox(width: 6),
-          Text('$label: ${DateFormat('dd MMM yy').format(date)}',
+          Text('$label: ${text ?? DateFormat('dd MMM yy').format(date!)}',
               style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
         ]),
       ));

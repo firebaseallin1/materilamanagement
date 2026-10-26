@@ -16,44 +16,50 @@ class AdvanceScreen extends StatefulWidget {
 
 class _AdvanceScreenState extends State<AdvanceScreen> {
   List _items = [];
-  List _branches = [];
-  List _employees = [];
+  List _allEmployees = [];
+  List _scopeEmployees = []; // employees of the user being viewed
+  List _users = [];
   bool _loading = true;
   String _search = '';
 
   DateTime? _fromDate;
   DateTime? _toDate;
-  String? _filterBranchId;
   String? _filterEmployeeId;
+  String? _filterType; // null = all, 'given', 'returned'
+  String? _filterUserId; // admin only
 
   static const _primary = Color(0xFF111827);
   static const _accent = Color(0xFF7C3AED);
+  static const _returnColor = Color(0xFF059669);
 
-  static DateTime _weekSunday() {
-    final now = DateTime.now();
-    final daysFromSun = now.weekday % 7; // Sun=7→0, Mon=1→1, …, Sat=6→6
-    return DateTime(now.year, now.month, now.day - daysFromSun);
-  }
+  // Users only view advances of their own employees; admin records them
+  bool get _isAdmin => context.read<AuthService>().isAdmin;
+
+  // Admin viewing everyone picks from all employees; otherwise only the
+  // employees that belong to the user being viewed
+  List get _employees =>
+      _isAdmin && _filterUserId == null ? _allEmployees : _scopeEmployees;
 
   @override
   void initState() {
     super.initState();
-    final sunday = _weekSunday();
-    _fromDate = sunday;
-    _toDate = sunday.add(const Duration(days: 6));
+    // No default date range — advances are a running balance, so show all history
     _loadDropdownData();
     _load();
   }
 
   Future<void> _loadDropdownData() async {
+    if (!_isAdmin) return;
     final results = await Future.wait([
-      ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'}),
       ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
+      ApiService.get('/users'),
     ]);
     if (mounted) {
       setState(() {
-        _branches = results[0]['data'] ?? [];
-        _employees = results[1]['data'] ?? [];
+        _allEmployees = results[0]['data'] ?? [];
+        _users = (results[1]['data'] as List? ?? [])
+            .where((u) => u['role'] != 'admin')
+            .toList();
       });
     }
   }
@@ -67,14 +73,31 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           DateTime(_toDate!.year, _toDate!.month, _toDate!.day, 23, 59, 59);
       params['to'] = end.toIso8601String();
     }
-    if (_filterBranchId != null) params['branch'] = _filterBranchId!;
     if (_filterEmployeeId != null) params['employee'] = _filterEmployeeId!;
+    if (_filterType != null) params['type'] = _filterType!;
+    if (_filterUserId != null) params['user'] = _filterUserId!;
+    params['limit'] = '1000';
     final res = await ApiService.get('/advances', params: params);
-    if (mounted)
-      setState(() {
-        _items = res['data'] ?? [];
-        _loading = false;
-      });
+    if (!mounted) return;
+    setState(() {
+      _items = res['data'] ?? [];
+      _loading = false;
+      // Build the employee filter list from the advances in scope
+      if (_filterEmployeeId == null) {
+        final seen = <String, Map>{};
+        for (final i in _items) {
+          final e = i['employee'];
+          if (e is Map && e['_id'] != null) seen[e['_id']] = e;
+        }
+        _scopeEmployees = seen.values.toList()
+          ..sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+      }
+    });
+  }
+
+  static String _userLabel(Map item) {
+    final users = item['users'] as List? ?? [];
+    return users.map((u) => u['name'] ?? '').where((n) => n.isNotEmpty).join(', ');
   }
 
   Future<void> _delete(String id) async {
@@ -122,20 +145,29 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
     final q = _search.toLowerCase();
     return _items
         .where((i) =>
-            (i['employee']?['name'] ?? '').toString().toLowerCase().contains(q))
+            (i['employee']?['name'] ?? '').toString().toLowerCase().contains(q) ||
+            _userLabel(i).toLowerCase().contains(q))
         .toList();
   }
 
   int get _activeFilterCount {
     int c = 0;
     if (_fromDate != null || _toDate != null) c++;
-    if (_filterBranchId != null) c++;
     if (_filterEmployeeId != null) c++;
+    if (_filterUserId != null) c++;
+    if (_filterType != null) c++;
     return c;
   }
 
-  double get _totalAmount =>
-      _filtered.fold(0.0, (s, i) => s + ((i['amount'] ?? 0).toDouble()));
+  static bool _isReturn(Map i) => i['type'] == 'returned';
+
+  double get _totalGiven => _filtered
+      .where((i) => !_isReturn(i))
+      .fold(0.0, (s, i) => s + ((i['amount'] ?? 0).toDouble()));
+
+  double get _totalReturned => _filtered
+      .where((i) => _isReturn(i))
+      .fold(0.0, (s, i) => s + ((i['amount'] ?? 0).toDouble()));
 
   // ── Date picker ─────────────────────────────────────────────────────────────
 
@@ -227,11 +259,13 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           ScreenHeader(
             title: 'Advances',
-            subtitle: 'Track advance payments given to employees',
+            subtitle: _isAdmin
+                ? 'Advances given to and returned by employees'
+                : 'Advance details of your employees',
             onRefresh: _load,
             onSearchChanged: (v) => setState(() => _search = v),
             searchHint: 'Search by name...',
-            onAdd: _openForm,
+            onAdd: _isAdmin ? _openForm : null,
             addLabel: 'Add Advance',
           ),
           _buildToolbar(isMobile),
@@ -261,22 +295,186 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
       child: Row(children: [
         _chip(Icons.people_outline_rounded, '$count records',
             const Color(0xFF374151), const Color(0xFFE5E7EB)),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-              color: _accent, borderRadius: BorderRadius.circular(8)),
-          child: Row(children: [
-            const Icon(Icons.currency_rupee_rounded,
-                size: 13, color: Colors.white),
-            Text(fmt.format(_totalAmount),
-                style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
-          ]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            reverse: true,
+            child: Row(children: [
+              _chip(Icons.north_east_rounded,
+                  'Given ₹${fmt.format(_totalGiven)}', _accent,
+                  const Color(0xFFEDE9FE)),
+              const SizedBox(width: 8),
+              _chip(Icons.south_west_rounded,
+                  'Returned ₹${fmt.format(_totalReturned)}', _returnColor,
+                  const Color(0xFFD1FAE5)),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                    color: _accent, borderRadius: BorderRadius.circular(8)),
+                child: Row(children: [
+                  const Text('Balance ',
+                      style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  const Icon(Icons.currency_rupee_rounded,
+                      size: 13, color: Colors.white),
+                  Text(fmt.format(_totalGiven - _totalReturned),
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                ]),
+              ),
+            ]),
+          ),
         ),
       ]),
+    );
+  }
+
+  Widget _typeBadge(Map item) {
+    final ret = _isReturn(item);
+    final color = ret ? _returnColor : _accent;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(ret ? Icons.south_west_rounded : Icons.north_east_rounded,
+            size: 11, color: color),
+        const SizedBox(width: 3),
+        Text(ret ? 'Returned' : 'Given',
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+      ]),
+    );
+  }
+
+  // ── History ──────────────────────────────────────────────────────────────────
+
+  Future<void> _openHistory(Map employee) async {
+    final empId = employee['_id'] as String?;
+    if (empId == null) return;
+    final fmt = NumberFormat('#,##0.00');
+    final dateFmt = DateFormat('dd MMM yyyy');
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: ApiService.get('/advances',
+                params: {'employee': empId, 'limit': '1000'}),
+            builder: (ctx, snap) {
+              if (!snap.hasData) {
+                return const SizedBox(height: 200, child: AppLoader());
+              }
+              // Oldest first so the running balance builds up over time
+              final list = List<Map>.from(snap.data!['data'] ?? [])
+                ..sort((a, b) =>
+                    (a['date'] ?? '').toString().compareTo((b['date'] ?? '').toString()));
+              double bal = 0, given = 0, returned = 0;
+              final balances = <double>[];
+              for (final a in list) {
+                final amt = (a['amount'] ?? 0).toDouble();
+                if (_isReturn(a)) {
+                  returned += amt;
+                  bal -= amt;
+                } else {
+                  given += amt;
+                  bal += amt;
+                }
+                balances.add(bal);
+              }
+              return Column(mainAxisSize: MainAxisSize.min, children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+                  child: Row(children: [
+                    const Icon(Icons.history_rounded, color: _accent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('Advance History – ${employee['name'] ?? ''}',
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx)),
+                  ]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: [
+                    _chip(Icons.north_east_rounded, 'Given ₹${fmt.format(given)}',
+                        _accent, const Color(0xFFEDE9FE)),
+                    _chip(Icons.south_west_rounded,
+                        'Returned ₹${fmt.format(returned)}', _returnColor,
+                        const Color(0xFFD1FAE5)),
+                    _chip(Icons.account_balance_wallet_outlined,
+                        'Balance ₹${fmt.format(bal)}', Colors.white, _accent),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                Flexible(
+                  child: list.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Text('No advance records',
+                              style: TextStyle(color: Color(0xFF6B7280))))
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: list.length,
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                          // Newest on top
+                          itemBuilder: (_, idx) {
+                            final i = list.length - 1 - idx;
+                            final a = list[i];
+                            final ret = _isReturn(a);
+                            final amt = (a['amount'] ?? 0).toDouble();
+                            return ListTile(
+                              dense: true,
+                              leading: _typeBadge(a),
+                              title: Text(
+                                  a['date'] != null
+                                      ? dateFmt.format(
+                                          DateTime.parse(a['date']).toLocal())
+                                      : '—',
+                                  style: const TextStyle(fontSize: 13)),
+                              subtitle: Text(
+                                  (a['remarks'] ?? '').toString(),
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis),
+                              trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                        '${ret ? '−' : '+'} ₹${fmt.format(amt)}',
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: ret ? _returnColor : _accent)),
+                                    Text('Bal ₹${fmt.format(balances[i])}',
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF6B7280))),
+                                  ]),
+                            );
+                          },
+                        ),
+                ),
+              ]);
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -301,6 +499,62 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
 
     // Only the filter chips scroll horizontally — Spacer/Expanded not allowed inside
     final filterChips = Row(mainAxisSize: MainAxisSize.min, children: [
+      if (_isAdmin) ...[
+        _filterBox(
+            child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            value: _filterUserId,
+            hint: const Text('All Users',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+            isDense: true,
+            isExpanded: true,
+            icon: const Icon(Icons.expand_more_rounded,
+                size: 15, color: Color(0xFF6B7280)),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
+            borderRadius: BorderRadius.circular(8),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('All Users')),
+              ..._users.map((u) => DropdownMenuItem(
+                    value: u['_id'] as String,
+                    child: Text(u['name'] as String? ?? '',
+                        overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (v) {
+              setState(() {
+                _filterUserId = v;
+                _filterEmployeeId = null; // may not belong to the new user
+              });
+              _load();
+            },
+          ),
+        )),
+        const SizedBox(width: 8),
+      ],
+      _filterBox(
+          child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _filterType,
+          hint: const Text('All Types',
+              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          isDense: true,
+          isExpanded: true,
+          icon: const Icon(Icons.expand_more_rounded,
+              size: 15, color: Color(0xFF6B7280)),
+          style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
+          borderRadius: BorderRadius.circular(8),
+          items: const [
+            DropdownMenuItem(value: null, child: Text('All Types')),
+            DropdownMenuItem(value: 'given', child: Text('Advance Given')),
+            DropdownMenuItem(value: 'returned', child: Text('Advance Returned')),
+          ],
+          onChanged: (v) {
+            setState(() => _filterType = v);
+            _load();
+          },
+        ),
+      )),
+      const SizedBox(width: 8),
       _filterBox(
           child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
@@ -330,33 +584,6 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           ],
           onChanged: (v) {
             setState(() => _filterEmployeeId = v);
-            _load();
-          },
-        ),
-      )),
-      const SizedBox(width: 8),
-      _filterBox(
-          child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          value: _filterBranchId,
-          hint: const Text('All Branches',
-              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-          isDense: true,
-          isExpanded: true,
-          icon: const Icon(Icons.expand_more_rounded,
-              size: 15, color: Color(0xFF6B7280)),
-          style: const TextStyle(fontSize: 12, color: Color(0xFF111827)),
-          borderRadius: BorderRadius.circular(8),
-          items: [
-            const DropdownMenuItem(value: null, child: Text('All Branches')),
-            ..._branches.map((b) => DropdownMenuItem(
-                  value: b['_id'] as String,
-                  child: Text(b['name'] as String? ?? '',
-                      overflow: TextOverflow.ellipsis),
-                )),
-          ],
-          onChanged: (v) {
-            setState(() => _filterBranchId = v);
             _load();
           },
         ),
@@ -392,8 +619,9 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
             setState(() {
               _fromDate = null;
               _toDate = null;
-              _filterBranchId = null;
               _filterEmployeeId = null;
+              _filterType = null;
+              _filterUserId = null;
             });
             _load();
           },
@@ -429,7 +657,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           child: Text('${_filtered.length} rows',
               style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
         ),
-        if (isMobile) ...[
+        if (isMobile && _isAdmin) ...[
           const SizedBox(width: 8),
           SizedBox(
             height: 34,
@@ -528,17 +756,21 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
       Container(
         color: const Color(0xFFF9FAFB),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: const Row(children: [
-          SizedBox(width: 28, child: Text('#', style: _kAdvHdr)),
-          SizedBox(width: 10),
-          SizedBox(width: 36),
-          SizedBox(width: 10),
-          Expanded(flex: 3, child: Text('Employee', style: _kAdvHdr)),
-          Expanded(flex: 2, child: Text('Branch', style: _kAdvHdr)),
+        child: Row(children: [
+          const SizedBox(width: 28, child: Text('#', style: _kAdvHdr)),
+          const SizedBox(width: 10),
+          const SizedBox(width: 36),
+          const SizedBox(width: 10),
+          const Expanded(flex: 3, child: Text('Employee', style: _kAdvHdr)),
+          if (_isAdmin)
+            const Expanded(flex: 2, child: Text('User', style: _kAdvHdr)),
+          ...const [
+          Expanded(flex: 2, child: Text('Type', style: _kAdvHdr)),
           Expanded(flex: 2, child: Text('Amount', style: _kAdvHdr)),
           Expanded(flex: 2, child: Text('Date', style: _kAdvHdr)),
           Expanded(flex: 2, child: Text('Remarks', style: _kAdvHdr)),
           SizedBox(width: 40),
+          ],
         ]),
       ),
       const Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -584,18 +816,25 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                     Text(item['employee']?['empCode'] ?? '',
                         style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))),
                 ])),
+            if (_isAdmin)
+              Expanded(
+                  flex: 2,
+                  child: Text(
+                      _userLabel(item).isEmpty ? '—' : _userLabel(item),
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF374151)),
+                      overflow: TextOverflow.ellipsis)),
             Expanded(
                 flex: 2,
-                child: Text(item['branch']?['name'] ?? '—',
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF374151)))),
+                child: Align(
+                    alignment: Alignment.centerLeft, child: _typeBadge(item))),
             Expanded(
                 flex: 2,
-                child: Text('₹${fmt.format(amount)}',
-                    style: const TextStyle(
+                child: Text('${_isReturn(item) ? '−' : ''}₹${fmt.format(amount)}',
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: _accent))),
+                        color: _isReturn(item) ? _returnColor : _accent))),
             Expanded(
                 flex: 2,
                 child: Text(
@@ -660,15 +899,20 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                         color: Color(0xFF111827))),
-                const SizedBox(height: 3),
-                Row(children: [
-                  const Icon(Icons.store_outlined,
-                      size: 11, color: Color(0xFF9CA3AF)),
-                  const SizedBox(width: 3),
-                  Text(item['branch']?['name'] ?? '—',
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF6B7280))),
-                ]),
+                if (_isAdmin && _userLabel(item).isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    const Icon(Icons.person_outline_rounded,
+                        size: 11, color: Color(0xFF9CA3AF)),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(_userLabel(item),
+                          style: const TextStyle(
+                              fontSize: 12, color: Color(0xFF6B7280)),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ]),
+                ],
                 if ((item['remarks'] ?? '').toString().isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(item['remarks'],
@@ -678,9 +922,13 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                 ],
               ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('₹${fmt.format(amount)}',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 15, color: _accent)),
+            _typeBadge(item),
+            const SizedBox(height: 3),
+            Text('${_isReturn(item) ? '−' : ''}₹${fmt.format(amount)}',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: _isReturn(item) ? _returnColor : _accent)),
             const SizedBox(height: 3),
             Text(
                 item['date'] != null
@@ -742,7 +990,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
   }
 
   Widget _actionMenu(Map item) {
-    if (!context.read<AuthService>().isAdmin) return const SizedBox.shrink();
+    final isAdmin = context.read<AuthService>().isAdmin;
     return SizedBox(
         width: 40,
         child: PopupMenuButton<String>(
@@ -750,7 +998,15 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
               size: 18, color: Color(0xFF9CA3AF)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 3,
-          itemBuilder: (_) => const [
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+                value: 'history',
+                child: Row(children: [
+                  Icon(Icons.history_rounded, size: 15, color: Color(0xFF374151)),
+                  SizedBox(width: 8),
+                  Text('History', style: TextStyle(fontSize: 13)),
+                ])),
+            if (isAdmin) ...const [
             PopupMenuItem(
                 value: 'edit',
                 child: Row(children: [
@@ -767,8 +1023,12 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                   Text('Delete',
                       style: TextStyle(fontSize: 13, color: Color(0xFFDC2626))),
                 ])),
+            ],
           ],
           onSelected: (v) {
+            if (v == 'history' && item['employee'] is Map) {
+              _openHistory(item['employee']);
+            }
             if (v == 'edit') _openForm(item);
             if (v == 'delete') _delete(item['_id']);
           },
@@ -801,22 +1061,28 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
         Text(
             hasFilter
                 ? 'Try adjusting your search or filters.'
-                : 'Add your first advance to get started.',
+                : _isAdmin
+                    ? 'Add your first advance to get started.'
+                    : 'No advances for your employees.',
             style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
         if (hasFilter) ...[
           const SizedBox(height: 12),
           TextButton(
-            onPressed: () => setState(() {
-              _search = '';
-              _fromDate = null;
-              _toDate = null;
-              _filterBranchId = null;
-              _filterEmployeeId = null;
-            }),
+            onPressed: () {
+              setState(() {
+                _search = '';
+                _fromDate = null;
+                _toDate = null;
+                _filterEmployeeId = null;
+                _filterType = null;
+                _filterUserId = null;
+              });
+              _load();
+            },
             child:
                 const Text('Clear filters', style: TextStyle(color: _accent)),
           ),
-        ] else ...[
+        ] else if (_isAdmin) ...[
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _openForm,
@@ -854,12 +1120,14 @@ class AdvanceFormPanel extends StatefulWidget {
 
 class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
   final _formKey = GlobalKey<FormState>();
-  List _users = [], _branches = [];
-  String? _employeeId, _branchId;
+  List _users = [];
+  String? _employeeId;
   final _amountCtrl = TextEditingController();
   final _remarksCtrl = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
+  String _type = 'given';
+  double? _balance; // employee's current advance balance
 
   static const _primary = Color(0xFF1B3A27);
   static const _accent = Color(0xFF7C3AED);
@@ -872,11 +1140,37 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
     if (widget.item != null) {
       final e = widget.item!;
       _employeeId = e['employee']?['_id'];
-      _branchId = e['branch']?['_id'];
       _amountCtrl.text = e['amount'] != null ? e['amount'].toString() : '';
       _remarksCtrl.text = e['remarks'] ?? '';
       if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      _type = e['type'] == 'returned' ? 'returned' : 'given';
+      if (_employeeId != null) _loadBalance();
     }
+  }
+
+  Future<void> _loadBalance() async {
+    final emp = _employeeId;
+    if (emp == null) {
+      setState(() => _balance = null);
+      return;
+    }
+    final res = await ApiService.get('/advances/balance', params: {'employee': emp});
+    if (mounted && emp == _employeeId) {
+      setState(() => _balance = (res['advanceBalance'] as num?)?.toDouble());
+    }
+  }
+
+  // Balance available to return; when editing a return, its own amount is added back
+  double? get _returnable {
+    if (_balance == null) return null;
+    final e = widget.item;
+    if (e != null && e['type'] == 'returned' && e['employee']?['_id'] == _employeeId) {
+      return _balance! + ((e['amount'] ?? 0) as num).toDouble();
+    }
+    if (e != null && e['type'] != 'returned' && e['employee']?['_id'] == _employeeId) {
+      return _balance! - ((e['amount'] ?? 0) as num).toDouble();
+    }
+    return _balance;
   }
 
   @override
@@ -887,15 +1181,9 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
   }
 
   Future<void> _loadDropdowns() async {
-    final results = await Future.wait(
-        [ApiService.get('/employees', params: {'isActive': 'true', 'limit': '1000'}),
-         ApiService.get('/branches', params: {'isActive': 'true', 'limit': '1000'})]);
-    if (mounted) {
-      setState(() {
-        _users = results[0]['data'] ?? [];
-        _branches = results[1]['data'] ?? [];
-      });
-    }
+    final res = await ApiService.get('/employees',
+        params: {'isActive': 'true', 'limit': '1000'});
+    if (mounted) setState(() => _users = res['data'] ?? []);
   }
 
   Future<void> _save() async {
@@ -903,7 +1191,7 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
     setState(() => _saving = true);
     final body = {
       'employee': _employeeId,
-      'branch': _branchId,
+      'type': _type,
       'amount': double.tryParse(_amountCtrl.text.trim()) ?? 0,
       'date': _date.toIso8601String(),
       'remarks': _remarksCtrl.text.trim(),
@@ -953,6 +1241,8 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
   @override
   Widget build(BuildContext context) {
     final isNew = widget.item == null;
+    final isReturn = _type == 'returned';
+    final fmt = NumberFormat('#,##0.00');
     return Column(mainAxisSize: MainAxisSize.min, children: [
       const SizedBox(height: 10),
       Container(
@@ -999,7 +1289,7 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
                 const SizedBox(height: 2),
                 Text(
                     isNew
-                        ? 'Record advance payment to employee'
+                        ? 'Record advance given to / returned by employee'
                         : 'Update advance details',
                     style:
                         const TextStyle(color: Colors.white70, fontSize: 11)),
@@ -1028,6 +1318,34 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                              value: 'given',
+                              icon: Icon(Icons.north_east_rounded, size: 16),
+                              label: Text('Advance Given')),
+                          ButtonSegment(
+                              value: 'returned',
+                              icon: Icon(Icons.south_west_rounded, size: 16),
+                              label: Text('Advance Returned')),
+                        ],
+                        selected: {_type},
+                        onSelectionChanged: (s) =>
+                            setState(() => _type = s.first),
+                        style: SegmentedButton.styleFrom(
+                          selectedBackgroundColor: isReturn
+                              ? const Color(0xFFD1FAE5)
+                              : const Color(0xFFEDE9FE),
+                          selectedForegroundColor: isReturn
+                              ? const Color(0xFF059669)
+                              : _accent,
+                          textStyle: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
                       initialValue: _employeeId,
                       decoration:
@@ -1049,26 +1367,30 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
                               style: TextStyle(color: active ? null : Colors.grey)),
                         );
                       }).toList(),
-                      onChanged: (v) => setState(() => _employeeId = v),
+                      onChanged: (v) {
+                        setState(() => _employeeId = v);
+                        _loadBalance();
+                      },
                       validator: (v) => v == null ? 'Required' : null,
                     ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _branchId,
-                      decoration: _dec('Branch', Icons.store_outlined),
-                      style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF1A1A2E)),
-                      borderRadius: BorderRadius.circular(10),
-                      isExpanded: true,
-                      items: _branches
-                          .map<DropdownMenuItem<String>>((b) =>
-                              DropdownMenuItem(
-                                  value: b['_id'] as String,
-                                  child: Text(b['name'] as String)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _branchId = v),
-                      validator: (v) => v == null ? 'Required' : null,
-                    ),
+                    if (_employeeId != null && _balance != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F3FF),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                            'Current advance balance: ₹${fmt.format(_balance)}',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _accent)),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _amountCtrl,
@@ -1077,10 +1399,19 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
                       ],
-                      decoration:
-                          _dec('Amount (₹)', Icons.currency_rupee_rounded),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      decoration: _dec(
+                          isReturn ? 'Returned Amount (₹)' : 'Amount (₹)',
+                          Icons.currency_rupee_rounded),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        final amt = double.tryParse(v.trim()) ?? 0;
+                        if (amt <= 0) return 'Enter a valid amount';
+                        final max = _returnable;
+                        if (isReturn && max != null && amt > max + 0.001) {
+                          return 'Cannot return more than balance ₹${fmt.format(max < 0 ? 0 : max)}';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 14),
                     DatePickerField(
@@ -1137,7 +1468,12 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
                             ),
                             child: _saving
                                 ? const ButtonLoader()
-                                : Text(isNew ? 'Save Advance' : 'Save Changes',
+                                : Text(
+                                    !isNew
+                                        ? 'Save Changes'
+                                        : isReturn
+                                            ? 'Save Return'
+                                            : 'Save Advance',
                                     style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 14,
