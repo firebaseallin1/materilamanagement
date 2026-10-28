@@ -19,8 +19,6 @@ dependencies:
   fl_chart: ^0.64.0
   flutter_svg: ^2.0.7
   image_picker: ^1.0.4
-  file_picker: ^6.0.0
-  open_file: ^3.3.2
   path_provider: ^2.1.1
   pdf: ^3.10.8
   printing: ^5.12.0
@@ -30,6 +28,27 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+
+# Android launcher icon — run: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/images/logoonly.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/images/logoonly.png
+  min_sdk_android: 21
+
+# Launch screen in the app's brand colours — run: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/images/logoonly.png
+  android_12:
+    color: "#FFFFFF"
+    image: assets/images/logoonly.png
+  ios: false
+  web: false
 
 flutter:
   uses-material-design: true

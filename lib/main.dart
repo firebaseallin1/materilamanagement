@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
@@ -7,6 +8,16 @@ import 'screens/dashboard/dashboard_screen.dart';
 import 'widgets/common_widgets.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Draw behind transparent system bars; the app is mostly on dark green
+  // headers, so use light status bar icons
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
   runApp(
     MultiProvider(
       providers: [
@@ -23,20 +34,45 @@ class MMSApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Material Management System',
+      title: 'MSM & CO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        // Brand green — pickers, dialogs, loaders and switches follow it
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1976D2),
-          primary: const Color(0xFF1976D2),
-          secondary: const Color(0xFF03A9F4),
+          seedColor: const Color(0xFF2E7D52),
+          primary: const Color(0xFF2E7D52),
+          secondary: const Color(0xFF1B3A27),
+          surface: Colors.white,
         ),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
         textTheme: GoogleFonts.poppinsTextTheme(),
+        // Larger tap targets and smooth page transitions on phones
+        materialTapTargetSize: MaterialTapTargetSize.padded,
+        pageTransitionsTheme: const PageTransitionsTheme(builders: {
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+        }),
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10))),
+        ),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16))),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          showDragHandle: true,
+        ),
         appBarTheme: AppBarTheme(
           backgroundColor: const Color(0xFF1B3A27),
           foregroundColor: Colors.white,
           elevation: 0,
+          systemOverlayStyle: SystemUiOverlayStyle.light,
           titleTextStyle: GoogleFonts.poppins(
             color: Colors.white,
             fontSize: 18,
@@ -45,7 +81,7 @@ class MMSApp extends StatelessWidget {
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1976D2),
+            backgroundColor: const Color(0xFF2E7D52),
             foregroundColor: Colors.white,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -62,6 +98,12 @@ class MMSApp extends StatelessWidget {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
+      ),
+      // Keep content clear of Android's gesture / navigation bar
+      builder: (context, child) => ColoredBox(
+        color: Colors.white,
+        child: SafeArea(
+            top: false, left: false, right: false, child: child!),
       ),
       home: const AuthWrapper(),
     );

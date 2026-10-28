@@ -123,7 +123,11 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             alignment: Alignment.centerRight,
             child: Material(
               elevation: 16,
-              child: SizedBox(
+              child: Container(
+
+                // Keep the panel header below the status bar
+
+                padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
                 width: pw,
                 height: double.infinity,
                 child: ExpenseFormPanel(
@@ -450,8 +454,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             ),
             const SizedBox(width: 8),
             totalChip(),
-            const SizedBox(width: 8),
-            _addBtn(),
+            // The header already shows a compact add button on phones
           ]),
           const SizedBox(height: 8),
           Row(children: [
@@ -625,18 +628,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         offset.dx, offset.dy + box.size.height + 4, offset.dx + box.size.width, 0);
   }
 
-  Widget _addBtn() => ElevatedButton(
-        onPressed: () => _openForm(),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _expPrimary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Icon(Icons.add_rounded, size: 16),
-      );
 
   // ── Card color palette ────────────────────────────────────────────────────────
 

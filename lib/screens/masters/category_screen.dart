@@ -83,7 +83,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
         child: Material(
           elevation: 16,
           borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
-          child: SizedBox(
+          child: Container(
+            // Keep the panel header below the status bar
+            padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
             child: CategoryFormPanel(category: category, onSaved: _load),
@@ -927,7 +929,9 @@ class _MaterialScreenState extends State<MaterialScreen> {
           elevation: 16,
           borderRadius:
               const BorderRadius.horizontal(left: Radius.circular(20)),
-          child: SizedBox(
+          child: Container(
+            // Keep the panel header below the status bar
+            padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
             child: MaterialFormPanel(

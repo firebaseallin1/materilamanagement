@@ -21,13 +21,13 @@ const _atBorder = Color(0xFFE5E7EB);
 class AttendanceReportScreen extends StatelessWidget {
   const AttendanceReportScreen({super.key});
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) =>const Scaffold(
         backgroundColor: _atBg,
         body: Column(children: [
           ScreenHeader(
               title: 'Attendance Report',
               subtitle: 'Employee attendance & earnings summary'),
-          const Expanded(child: _AttReportView()),
+           Expanded(child: _AttReportView()),
         ]),
       );
 }
@@ -1108,32 +1108,97 @@ class _AttReportViewState extends State<_AttReportView> {
   @override
   Widget build(BuildContext context) {
     final summary = _empSummary;
-    return Column(children: [
-      _filters(),
-      // Summary bar
-      Container(
-        color: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Row(children: [
-          _statChip('Present', '$_totalPresent days', _atGreen),
-          const SizedBox(width: 14),
-          _statChip('Absent', '$_totalAbsent days', const Color(0xFFDC2626)),
-          const SizedBox(width: 14),
-          _statChip('OT', '${_totalOt.toStringAsFixed(1)} hrs', _atPurple),
-          if (_isAdmin) ...[
-            const SizedBox(width: 14),
-            _statChip(
-                'Earnings', '₹${_amtFmt.format(_totalEarnings)}', _atPrimary,
-                bold: true),
+    return LayoutBuilder(builder: (_, c) {
+      final mobile = c.maxWidth < 700;
+      final creditCard = !_loading && _userMode && _ledger != null
+          ? _userCreditCard(_ledger!)
+          : null;
+
+      // Phones: the whole report scrolls as one page, so the records are not
+      // squeezed under the filters and credit card
+      if (mobile) {
+        return ListView(padding: EdgeInsets.zero, children: [
+          _filters(),
+          _summaryBar(mobile: true),
+          const Divider(height: 1, color: _atBorder),
+          if (creditCard != null) creditCard,
+          if (_loading)
+            const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(
+                    child: CircularProgressIndicator(color: _atGreen)))
+          else if (summary.isEmpty)
+            Padding(
+                padding: const EdgeInsets.all(40),
+                child: Center(
+                    child: Text('No attendance records',
+                        style: TextStyle(
+                            color: Colors.grey.shade400, fontSize: 14))))
+          else ...[
+            _summaryPanel(summary, shrinkWrap: true),
+            const Divider(height: 1, color: _atBorder),
+            ..._sortedItems.map(_mobileCard),
+            const SizedBox(height: 12),
           ],
-          if (!_userMode) ...[
-            const SizedBox(width: 14),
-            _statChip(
-                'Paid Out', '₹${_amtFmt.format(_totalPeriodPaid)}',
-                const Color(0xFF2563EB),
-                bold: true),
-          ],
-          const Spacer(),
+        ]);
+      }
+
+      return Column(children: [
+        _filters(),
+        _summaryBar(mobile: false),
+        const Divider(height: 1, color: _atBorder),
+        if (creditCard != null) creditCard,
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: _atGreen))
+              : summary.isEmpty
+                  ? Center(
+                      child: Text('No attendance records',
+                          style: TextStyle(
+                              color: Colors.grey.shade400, fontSize: 14)))
+                  : _wideView(summary),
+        ),
+      ]);
+    });
+  }
+
+  Widget _summaryBar({required bool mobile}) {
+    final stats = <Widget>[
+      _statChip('Present', '$_totalPresent days', _atGreen),
+      _statChip('Absent', '$_totalAbsent days', const Color(0xFFDC2626)),
+      _statChip('OT', '${_totalOt.toStringAsFixed(1)} hrs', _atPurple),
+      if (_isAdmin)
+        _statChip('Earnings', '₹${_amtFmt.format(_totalEarnings)}', _atPrimary,
+            bold: true),
+      if (!_userMode)
+        _statChip('Paid Out', '₹${_amtFmt.format(_totalPeriodPaid)}',
+            const Color(0xFF2563EB),
+            bold: true),
+    ];
+    final actions = _summaryActions();
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 20, vertical: 10),
+      child: mobile
+          // Stats and buttons wrap onto extra lines on narrow screens
+          ? Wrap(
+              spacing: 14,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [...stats, ...actions])
+          : Row(children: [
+              for (var i = 0; i < stats.length; i++) ...[
+                if (i > 0) const SizedBox(width: 14),
+                stats[i],
+              ],
+              const Spacer(),
+              ...actions,
+            ]),
+    );
+  }
+
+  List<Widget> _summaryActions() {
+    return [
           IconButton(
             onPressed: _loading ? null : _load,
             icon: _loading
@@ -1180,24 +1245,7 @@ class _AttReportViewState extends State<_AttReportView> {
             ),
           ),
           ],
-        ]),
-      ),
-      const Divider(height: 1, color: _atBorder),
-      if (!_loading && _userMode && _ledger != null) _userCreditCard(_ledger!),
-      Expanded(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator(color: _atGreen))
-            : summary.isEmpty
-                ? Center(
-                    child: Text('No attendance records',
-                        style: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 14)))
-                : LayoutBuilder(
-                    builder: (_, c) => c.maxWidth >= 700
-                        ? _wideView(summary)
-                        : _mobileView(summary)),
-      ),
-    ]);
+    ];
   }
 
   // ── User credit (per user, per period) ────────────────────────────────────
@@ -1225,6 +1273,23 @@ class _AttReportViewState extends State<_AttReportView> {
                 style: TextStyle(
                     fontSize: 14, fontWeight: FontWeight.w700, color: c)),
           ]),
+        );
+
+    Widget op(String s) => Text(s,
+        style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF9CA3AF)));
+
+    // Outlined box that separates one group of tiles from the next
+    Widget group(Widget child) => Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _atBorder),
+          ),
+          child: child,
         );
 
     String day(dynamic iso) => iso is String && iso.length >= 10
@@ -1268,18 +1333,43 @@ class _AttReportViewState extends State<_AttReportView> {
             ),
         ]),
         const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          tile('Previous Pending', n('previousPending'),
-              const Color(0xFF6B7280)),
-          tile('Employees Amount', n('attendanceTotal'), _atPurple,
-              sign: '+ '),
-          tile('User Expense', n('expenseTotal'), const Color(0xFFEA580C),
-              sign: '+ '),
-          tile('Total', n('total'), _atPrimary),
-          tile('Paid to User', n('paidTotal'), const Color(0xFF2563EB),
-              sign: '− '),
-          tile('Pending', pending,
-              pending > 0 ? const Color(0xFFDC2626) : _atGreen),
+        // Same tiles, grouped: (owed = Total) · (Paid to User) · (Pending)
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          group(Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                tile('Previous Pending', n('previousPending'),
+                    const Color(0xFF6B7280)),
+                op('+'),
+                tile('Employees Amount', n('attendanceTotal'), _atPurple),
+                op('+'),
+                tile('User Expense', n('expenseTotal'),
+                    const Color(0xFFEA580C)),
+                op('='),
+                tile('Total', n('total'), _atPrimary),
+              ])),
+          // Tap to see the individual payments made to the user
+          group(Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _showUserPayments(l),
+              child: Stack(children: [
+                tile('Paid to User', n('paidTotal'), const Color(0xFF2563EB),
+                    sign: '− '),
+                const Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Icon(Icons.open_in_new_rounded,
+                      size: 12, color: Color(0xFF2563EB)),
+                ),
+              ]),
+            ),
+          )),
+          group(tile('Pending', pending,
+              pending > 0 ? const Color(0xFFDC2626) : _atGreen)),
         ]),
         if (expenses.isNotEmpty || payments.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -1340,6 +1430,127 @@ class _AttReportViewState extends State<_AttReportView> {
           ),
         ],
       ]),
+    );
+  }
+
+  void _showUserPayments(Map l) {
+    final payments = List<Map>.from(l['payments'] ?? []);
+    final total = payments.fold<double>(
+        0, (s, p) => s + ((p['amount'] ?? 0) as num).toDouble());
+    String day(dynamic iso) => iso is String && iso.length >= 10
+        ? _dateFmt.format(DateTime.parse(iso.substring(0, 10)))
+        : '—';
+    const blue = Color(0xFF2563EB);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 560),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 8, 4),
+              child: Row(children: [
+                const Icon(Icons.payments_outlined, color: blue),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Paid to ${l['user']?['name'] ?? 'User'}',
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700)),
+                        Text(
+                            '${_dateFmt.format(_from)} – ${_dateFmt.format(_to)}',
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF6B7280))),
+                      ]),
+                ),
+                IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx)),
+              ]),
+            ),
+            const Divider(height: 1, color: _atBorder),
+            Flexible(
+              child: payments.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('No payments in this period',
+                          style: TextStyle(color: Color(0xFF9CA3AF))))
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: payments.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                      itemBuilder: (_, i) {
+                        final p = payments[i];
+                        final desc = (p['description'] ?? '').toString();
+                        final ref = (p['referenceNo'] ?? '').toString();
+                        return ListTile(
+                          dense: true,
+                          leading: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: blue.withValues(alpha: 0.1),
+                            child: Text('${i + 1}',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: blue)),
+                          ),
+                          title: Text(
+                              '${day(p['date'])} · ${(p['paymentMode'] ?? '').toString().toUpperCase()}',
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w500)),
+                          subtitle: (desc.isEmpty && ref.isEmpty)
+                              ? null
+                              : Text(
+                                  [
+                                    if (ref.isNotEmpty) 'Ref: $ref',
+                                    if (desc.isNotEmpty) desc,
+                                  ].join(' · '),
+                                  style: const TextStyle(fontSize: 11)),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text('₹${_amtFmt.format(p['amount'] ?? 0)}',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: blue)),
+                            if (_isAdmin)
+                              IconButton(
+                                tooltip: 'Delete payment',
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    size: 18, color: Color(0xFFDC2626)),
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  _deletePayment(p['_id']);
+                                },
+                              ),
+                          ]),
+                        );
+                      },
+                    ),
+            ),
+            const Divider(height: 1, color: _atBorder),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+              child: Row(children: [
+                Text('${payments.length} payment${payments.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF6B7280))),
+                const Spacer(),
+                const Text('Total  ',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                Text('₹${_amtFmt.format(total)}',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800, color: blue)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -1468,20 +1679,16 @@ class _AttReportViewState extends State<_AttReportView> {
     ]);
   }
 
-  Widget _mobileView(Map<String, Map<String, dynamic>> summary) {
-    return SingleChildScrollView(
-      child: Column(children: [
-        _summaryPanel(summary),
-        const Divider(height: 1, color: _atBorder),
-        ..._sortedItems.map(_mobileCard),
-      ]),
-    );
-  }
-
-  Widget _summaryPanel(Map<String, Map<String, dynamic>> summary) {
+  // shrinkWrap: used inside the phone page's own scroll view
+  Widget _summaryPanel(Map<String, Map<String, dynamic>> summary,
+      {bool shrinkWrap = false}) {
     return Container(
       color: Colors.white,
-      child: ListView(padding: const EdgeInsets.all(14), children: [
+      child: ListView(
+          shrinkWrap: shrinkWrap,
+          physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+          padding: const EdgeInsets.all(14),
+          children: [
         const Text('EMPLOYEE SUMMARY',
             style: TextStyle(
                 fontSize: 11,

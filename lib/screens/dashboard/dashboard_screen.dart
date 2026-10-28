@@ -1599,18 +1599,23 @@ class _DashHeader extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Dashboard',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E))),
-            const SizedBox(height: 4),
-            Text(
-              'Real-time insights into stock levels and warehouse operations — $date',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ]),
+          // Expanded so the subtitle wraps on phones instead of overflowing
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Dashboard',
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A2E))),
+              const SizedBox(height: 4),
+              Text(
+                isDesktop
+                    ? 'Real-time insights into stock levels and warehouse operations — $date'
+                    : date,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ]),
+          ),
           if (isDesktop)
             Row(children: [
               _IconBtn(icon: Icons.mail_outline_rounded, onTap: () {}),
@@ -1811,14 +1816,18 @@ class _AttendanceChartShimmerState extends State<_AttendanceChartShimmer>
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header row — title + legend dots
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(children: [
+        // Header row — title + legend dots (wraps on narrow phones)
+        Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
             _box(160, 14, radius: 4),
             const SizedBox(width: 8),
             _box(50, 20, radius: 20),
           ]),
-          Row(children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
             _box(10, 10, radius: 5),
             const SizedBox(width: 5),
             _box(46, 10, radius: 4),
@@ -2005,7 +2014,10 @@ class _AttendanceBarChartCardState extends State<_AttendanceBarChartCard> {
               const Text('Branch wise Attendance',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
-              Row(children: [
+              Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 4,
+                  children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(

@@ -176,7 +176,11 @@ class _TransportScreenState extends State<TransportScreen> {
             alignment: Alignment.centerRight,
             child: Material(
               elevation: 16,
-              child: SizedBox(
+              child: Container(
+
+                // Keep the panel header below the status bar
+
+                padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
                 width: pw,
                 height: double.infinity,
                 child: TransportFormPanel(

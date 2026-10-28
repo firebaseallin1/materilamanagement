@@ -283,7 +283,11 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
             alignment: Alignment.centerRight,
             child: Material(
               elevation: 20,
-              child: SizedBox(
+              child: Container(
+
+                // Keep the panel header below the status bar
+
+                padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
                 width: pw,
                 height: double.infinity,
                 child: MeasurementFormPanel(

@@ -80,7 +80,9 @@ class _MeasurementTypeScreenState extends State<MeasurementTypeScreen> {
         child: Material(
           elevation: 16,
           borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
-          child: SizedBox(
+          child: Container(
+            // Keep the panel header below the status bar
+            padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
             child: MeasurementTypeFormPanel(type: type, onSaved: _load),

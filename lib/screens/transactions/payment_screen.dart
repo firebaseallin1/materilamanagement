@@ -13,6 +13,7 @@ const _payBlue = Color(0xFF2563EB);
 const _payPurple = Color(0xFF9333EA);
 const _payOrange = Color(0xFFEA580C);
 const _payAmber = Color(0xFFD97706);
+const _payUser = Color(0xFF0D9488);
 const _payPrimary = Color(0xFF111827);
 
 class PaymentScreen extends StatefulWidget {
@@ -200,7 +201,11 @@ class _PaymentScreenState extends State<PaymentScreen>
             alignment: Alignment.centerRight,
             child: Material(
               elevation: 16,
-              child: SizedBox(
+              child: Container(
+
+                // Keep the panel header below the status bar
+
+                padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
                 width: pw,
                 height: double.infinity,
                 child: PaymentFormPanel(
@@ -233,7 +238,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             onSearchChanged: (v) => setState(() => _search = v),
             searchHint: 'Search by name…',
             onAdd: _openForm,
-            addLabel: _tab.index == 0 ? 'Add Income' : 'Add Payment',
+            addLabel: 'Add Payment',
           ),
           _buildSummary(net, isMobile),
           _buildToolbar(isMobile),
@@ -387,6 +392,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             DropdownMenuItem(value: 'labor', child: Text('Labor')),
             DropdownMenuItem(value: 'transport', child: Text('Transport')),
             DropdownMenuItem(value: 'expense', child: Text('Expense')),
+            DropdownMenuItem(value: 'user', child: Text('User')),
             DropdownMenuItem(value: 'other', child: Text('Other')),
           ],
           onChanged: (v) { setState(() => _filterCategory = v); _load(); },
@@ -1608,6 +1614,8 @@ class _PaymentScreenState extends State<PaymentScreen>
         return _payPurple;
       case 'transport':
         return _payBlue;
+      case 'user':
+        return _payUser;
       default:
         return _payOrange;
     }
@@ -1619,6 +1627,8 @@ class _PaymentScreenState extends State<PaymentScreen>
         return Icons.people_outline_rounded;
       case 'transport':
         return Icons.local_shipping_outlined;
+      case 'user':
+        return Icons.manage_accounts_outlined;
       default:
         return Icons.receipt_long_outlined;
     }
@@ -1716,8 +1726,21 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
   double _advanceBalance = 0;
   bool _balanceLoading = false;
 
+  // Employees allocated to a user are paid through that user, not directly.
+  // empId → user name
+  final Map<String, String> _empUser = {};
+  List _users = [];
+
+  // User payment state
+  String? _payUserId;
+  Map? _userLedger;
+  bool _userLedgerLoading = false;
+  late DateTime _userFrom;
+  late DateTime _userTo;
+
   // Labour payment state
   List _laborEmps = [];
+  List _laborUserEmps = []; // loaded but skipped — mapped to a user
   bool _laborLoading = false;
   late DateTime _laborFrom;
   late DateTime _laborTo;
@@ -1793,6 +1816,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     _expenseTo = sunday.add(const Duration(days: 6));
     _measFrom = sunday;
     _measTo = sunday.add(const Duration(days: 6));
+    _userFrom = sunday;
+    _userTo = sunday.add(const Duration(days: 6));
     _loadDropdowns();
     if (widget.item != null) {
       final e = widget.item!;
@@ -1855,11 +1880,22 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     final results = await Future.wait([
       ApiService.get('/branches', params: {'limit': '1000', 'isActive': 'true'}),
       ApiService.get('/employees', params: {'limit': '1000', 'isActive': 'true'}),
+      ApiService.get('/users'),
     ]);
     if (mounted) {
       setState(() {
         _branches = results[0]['data'] ?? [];
         _employees = results[1]['data'] ?? [];
+        _users = (results[2]['data'] as List? ?? [])
+            .where((u) => u['role'] != 'admin' && u['isActive'] != false)
+            .toList();
+        _empUser.clear();
+        for (final u in _users) {
+          for (final e in (u['employees'] as List? ?? [])) {
+            final id = e is Map ? e['_id'] : e;
+            if (id != null) _empUser[id.toString()] = u['name'] ?? '';
+          }
+        }
       });
       if (_employeeId != null) _fetchBalance(_employeeId!);
     }
@@ -1947,6 +1983,55 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
 
   // ── Expense payment getters ───────────────────────────────────────────────
   bool get _isExpenseMode => _type == 'paid' && _category == 'expense';
+
+  // ── User payment (employees allocated to a user are paid via the user) ─────
+  bool get _isUserMode => _type == 'paid' && _category == 'user';
+
+  Future<void> _loadUserLedger() async {
+    if (_payUserId == null) return;
+    setState(() {
+      _userLedgerLoading = true;
+      _userLedger = null;
+    });
+    final fmt = DateFormat('yyyy-MM-dd');
+    final res = await ApiService.get('/user-expenses/ledger', params: {
+      'user': _payUserId!,
+      'from': fmt.format(_userFrom),
+      'to': fmt.format(_userTo),
+    });
+    if (!mounted) return;
+    setState(() {
+      _userLedgerLoading = false;
+      if (res['success'] == true) {
+        _userLedger = res['data'] as Map?;
+        final pending = ((_userLedger?['pending'] ?? 0) as num).toDouble();
+        _amountCtrl.text = pending > 0 ? pending.toStringAsFixed(2) : '';
+      } else {
+        showSnack(context, res['message'] ?? 'Could not load user credit',
+            error: true);
+      }
+    });
+  }
+
+  Future<void> _pickUserDate({required bool isFrom}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom ? _userFrom : _userTo,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _userFrom = picked;
+        if (_userTo.isBefore(picked)) _userTo = picked;
+      } else {
+        _userTo = picked;
+        if (_userFrom.isAfter(picked)) _userFrom = picked;
+      }
+    });
+    _loadUserLedger();
+  }
 
   // ── Measurement income getters ─────────────────────────────────────────────
   bool get _isMeasurementMode => _type == 'received' && _category == 'measurement';
@@ -2203,9 +2288,15 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
     if (!mounted) return;
 
     final res = results[0];
-    final list = (res['data'] as List? ?? [])
+    final worked = (res['data'] as List? ?? [])
         .where((e) => (e['presentDays'] ?? 0) > 0 || (e['earnings'] ?? 0) > 0)
         .toList();
+    // Employees allocated to a user are settled through the user's credit
+    // (User payment), so they are not paid here directly.
+    final list =
+        worked.where((e) => !_empUser.containsKey(e['_id'].toString())).toList();
+    _laborUserEmps =
+        worked.where((e) => _empUser.containsKey(e['_id'].toString())).toList();
 
     // When empty and the backend knows a later unpaid period exists,
     // auto-advance the date pickers to that period and reload once.
@@ -2347,6 +2438,36 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         if (res['success'] == true) {
           showSnack(context,
               'Income recorded for ${selected.length} measurement${selected.length == 1 ? '' : 's'}');
+          widget.onSaved();
+        } else {
+          showSnack(context, res['message'] ?? 'Save failed', error: true);
+        }
+      }
+      return;
+    }
+
+    // ── User payment (settles the user's employees + expenses credit) ────────
+    if (_isUserMode && !_isEdit) {
+      if (_payUserId == null) {
+        showSnack(context, 'Select a user', error: true);
+        setState(() => _saving = false);
+        return;
+      }
+      final fmt = DateFormat('yyyy-MM-dd');
+      final res = await ApiService.post('/user-expenses/pay', {
+        'user': _payUserId,
+        'amount': double.tryParse(_amountCtrl.text.trim()) ?? 0,
+        'paymentMode': _mode,
+        'date': fmt.format(_date),
+        'periodFrom': fmt.format(_userFrom),
+        'periodTo': fmt.format(_userTo),
+        'referenceNo': _refCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+      });
+      if (mounted) {
+        setState(() => _saving = false);
+        if (res['success'] == true) {
+          showSnack(context, 'Payment recorded for user');
           widget.onSaved();
         } else {
           showSnack(context, res['message'] ?? 'Save failed', error: true);
@@ -2668,6 +2789,10 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
                   Expanded(
                       child: _catBtn('expense', 'Expense',
                           Icons.receipt_long_outlined, _payOrange)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _catBtn('user', 'User',
+                          Icons.manage_accounts_outlined, _payUser)),
                 ]),
                 const SizedBox(height: 16),
               ],
@@ -2699,12 +2824,19 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               _buildTransportSection(),
             ] else if (_isExpenseMode && !_isEdit) ...[
               _buildExpenseSection(),
+            ] else if (_isUserMode && !_isEdit) ...[
+              _buildUserPaySection(),
             ] else ...[
-              // Employee selector (optional)
+              // Employee selector (optional) — employees allocated to a user
+              // are paid through the user, so they are not listed here
               AppDropdown<String>(
                 label: 'Employee (optional)',
                 value: _employeeId,
-                items: _employees.map<DropdownMenuItem<String>>((u) {
+                items: _employees
+                    .where((u) =>
+                        !_empUser.containsKey(u['_id'].toString()) ||
+                        u['_id'] == _employeeId)
+                    .map<DropdownMenuItem<String>>((u) {
                   final active = u['isActive'] ?? true;
                   final name = u['name'] as String? ?? '';
                   final code = u['empCode'] as String? ?? '';
@@ -2870,7 +3002,9 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
                               ? _payBlue
                               : (_isExpenseMode
                                   ? _payOrange
-                                  : (isOutgoing ? _payRed : _payGreen)))),
+                                  : (_isUserMode
+                                      ? _payUser
+                                      : (isOutgoing ? _payRed : _payGreen))))),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10)),
@@ -2885,7 +3019,9 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
                                 ? 'Record Payment for ${_selectedVehicles.length} Vehicle${_selectedVehicles.length == 1 ? '' : 's'}'
                                 : (_isExpenseMode
                                     ? 'Pay ${_selectedExpenseIds.length} Expense${_selectedExpenseIds.length == 1 ? '' : 's'}'
-                                    : (_isEdit
+                                    : (_isUserMode && !_isEdit)
+                                        ? 'Pay User'
+                                        : (_isEdit
                                         ? 'Update Payment'
                                         : (isOutgoing
                                             ? 'Record Payment'
@@ -3597,6 +3733,149 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
 
   // ── Labour section ──────────────────────────────────────────────────────────
 
+  // Shown in Labour mode: employees left out because a user is paid for them
+  Widget _userMappedNote() {
+    final byUser = <String, List<String>>{};
+    for (final e in _laborUserEmps) {
+      final user = _empUser[e['_id'].toString()] ?? '';
+      byUser.putIfAbsent(user, () => []).add(e['name']?.toString() ?? '');
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _payUser.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _payUser.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.info_outline_rounded, size: 15, color: _payUser),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+                '${_laborUserEmps.length} employee${_laborUserEmps.length == 1 ? '' : 's'} paid through their user — use the User payment',
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: _payUser)),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        ...byUser.entries.map((u) => Text('${u.key}: ${u.value.join(', ')}',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF374151)))),
+      ]),
+    );
+  }
+
+  Widget _buildUserPaySection() {
+    final fmt = NumberFormat('#,##0.00');
+    final dfmt = DateFormat('dd MMM yyyy');
+    final l = _userLedger;
+    double n(String k) => ((l?[k] ?? 0) as num).toDouble();
+    Widget row(String label, double v, {Color? color, bool bold = false}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(children: [
+            Expanded(
+                child: Text(label,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+                        color: const Color(0xFF374151)))),
+            Text('₹${fmt.format(v)}',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+                    color: color ?? const Color(0xFF111827))),
+          ]),
+        );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AppDropdown<String>(
+        label: 'User',
+        value: _payUserId,
+        items: _users
+            .map<DropdownMenuItem<String>>((u) => DropdownMenuItem(
+                value: u['_id'] as String,
+                child: Text(
+                    '${u['name'] ?? ''} (${(u['employees'] as List? ?? []).length} employees)',
+                    overflow: TextOverflow.ellipsis)))
+            .toList(),
+        onChanged: (v) {
+          setState(() => _payUserId = v);
+          _loadUserLedger();
+        },
+      ),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(
+            child: _datePicker(
+                label: dfmt.format(_userFrom),
+                active: true,
+                onTap: () => _pickUserDate(isFrom: true))),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _datePicker(
+                label: dfmt.format(_userTo),
+                active: true,
+                onTap: () => _pickUserDate(isFrom: false))),
+      ]),
+      const SizedBox(height: 12),
+      if (_userLedgerLoading)
+        const Center(
+            child: Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))))
+      else if (l != null)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Column(children: [
+            row('Previous pending', n('previousPending')),
+            row('Employees attendance amount', n('attendanceTotal'),
+                color: _payPurple),
+            row('User expenses', n('expenseTotal'), color: _payOrange),
+            const Divider(height: 14),
+            row('Total', n('total'), bold: true),
+            row('Already paid this period', n('paidTotal'), color: _payBlue),
+            row('Pending', n('pending'),
+                bold: true,
+                color: n('pending') > 0 ? _payRed : _payGreen),
+          ]),
+        )
+      else
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: const Text('Select a user to see their pending credit',
+              style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF))),
+        ),
+      const SizedBox(height: 14),
+      TextFormField(
+        controller: _amountCtrl,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: _dec('Paying Now (₹)'),
+        validator: (v) {
+          final x = double.tryParse(v?.trim() ?? '');
+          return x == null || x <= 0 ? 'Enter a valid amount' : null;
+        },
+        onChanged: (_) => setState(() {}),
+      ),
+    ]);
+  }
+
   Widget _buildLaborSection() {
     final fmt = NumberFormat('#,##0.00');
     final dfmt = DateFormat('dd MMM yyyy');
@@ -3663,6 +3942,11 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         ),
       ]),
       const SizedBox(height: 12),
+
+      if (_laborUserEmps.isNotEmpty && !_laborLoading) ...[
+        _userMappedNote(),
+        const SizedBox(height: 12),
+      ],
 
       // Employee list
       if (_laborEmps.isEmpty && !_laborLoading)
@@ -4822,6 +5106,11 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         catIcon = Icons.payment_outlined;
         catLabel = 'Regular Income';
         break;
+      case 'user':
+        catColor = _payUser;
+        catIcon = Icons.manage_accounts_outlined;
+        catLabel = 'User';
+        break;
       default:
         catColor = _payOrange;
         catIcon = Icons.receipt_long_outlined;
@@ -4892,7 +5181,8 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
         if (value == 'received' &&
             (_category == 'labor' ||
                 _category == 'transport' ||
-                _category == 'expense')) {
+                _category == 'expense' ||
+                _category == 'user')) {
           _category = 'regular';
         }
       }),

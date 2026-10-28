@@ -123,7 +123,9 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           elevation: 16,
           borderRadius:
               const BorderRadius.horizontal(left: Radius.circular(20)),
-          child: SizedBox(
+          child: Container(
+            // Keep the panel header below the status bar
+            padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
             width: sw > 900 ? sw * 0.36 : sw * 0.92,
             height: MediaQuery.of(ctx).size.height,
             child: AdvanceFormPanel(item: item, onSaved: _load),
@@ -290,44 +292,37 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
   Widget _buildTotalsStrip(int count) {
     final fmt = NumberFormat('#,##0.00');
     return Container(
+      width: double.infinity,
       color: const Color(0xFFF5F3FF),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-      child: Row(children: [
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      // Wraps onto a second line on phones so every total stays visible
+      child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
         _chip(Icons.people_outline_rounded, '$count records',
             const Color(0xFF374151), const Color(0xFFE5E7EB)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            reverse: true,
-            child: Row(children: [
-              _chip(Icons.north_east_rounded,
-                  'Given ₹${fmt.format(_totalGiven)}', _accent,
-                  const Color(0xFFEDE9FE)),
-              const SizedBox(width: 8),
-              _chip(Icons.south_west_rounded,
-                  'Returned ₹${fmt.format(_totalReturned)}', _returnColor,
-                  const Color(0xFFD1FAE5)),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                    color: _accent, borderRadius: BorderRadius.circular(8)),
-                child: Row(children: [
-                  const Text('Balance ',
-                      style: TextStyle(fontSize: 12, color: Colors.white70)),
-                  const Icon(Icons.currency_rupee_rounded,
-                      size: 13, color: Colors.white),
-                  Text(fmt.format(_totalGiven - _totalReturned),
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                ]),
-              ),
-            ]),
-          ),
+        _chip(Icons.north_east_rounded, 'Given ₹${fmt.format(_totalGiven)}',
+            _accent, const Color(0xFFEDE9FE)),
+        _chip(Icons.south_west_rounded,
+            'Returned ₹${fmt.format(_totalReturned)}', _returnColor,
+            const Color(0xFFD1FAE5)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+              color: _accent, borderRadius: BorderRadius.circular(8)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Balance ',
+                style: TextStyle(fontSize: 12, color: Colors.white70)),
+            const Icon(Icons.currency_rupee_rounded,
+                size: 13, color: Colors.white),
+            Text(fmt.format(_totalGiven - _totalReturned),
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white)),
+          ]),
         ),
       ]),
     );
@@ -657,24 +652,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
           child: Text('${_filtered.length} rows',
               style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
         ),
-        if (isMobile && _isAdmin) ...[
-          const SizedBox(width: 8),
-          SizedBox(
-            height: 34,
-            child: ElevatedButton(
-              onPressed: _openForm,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Icon(Icons.add_rounded, size: 16),
-            ),
-          ),
-        ],
+        // The header already shows a compact add button on phones
       ]),
     );
   }

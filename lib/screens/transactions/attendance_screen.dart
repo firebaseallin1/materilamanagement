@@ -28,7 +28,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String? _filterBranchId;
   String? _filterEmployeeId;
 
-  static const _primary = Color(0xFF111827);
   static const _green = Color(0xFF16A34A);
 
   static String _fmtDate(DateTime d) =>
@@ -130,7 +129,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           elevation: 16,
           borderRadius:
               const BorderRadius.horizontal(left: Radius.circular(20)),
-          child: SizedBox(
+          child: Container(
+            // Keep the panel header below the status bar
+            padding: EdgeInsets.only(top: MediaQuery.of(ctx).padding.top),
             width: panelWidth,
             height: MediaQuery.of(ctx).size.height,
             child: AttendanceFormPanel(item: item, onSaved: _load),
@@ -561,24 +562,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         child: Text('${_filtered.length} rows',
             style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
       ),
-      if (isMobile) ...[
-        const SizedBox(width: 8),
-        SizedBox(
-          height: 34,
-          child: ElevatedButton(
-            onPressed: _openForm,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Icon(Icons.add_rounded, size: 16),
-          ),
-        ),
-      ],
+      // The header already shows a compact add button on phones
     ]);
 
     return Padding(
