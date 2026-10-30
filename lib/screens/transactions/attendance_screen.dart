@@ -967,7 +967,7 @@ class _AttendanceFormPanelState extends State<AttendanceFormPanel> {
           ? e['hourRate'].toString()
           : '';
       _remarksCtrl.text = e['remarks'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      if (e['date'] != null) _date = parseDay(e['date']);
     }
   }
 

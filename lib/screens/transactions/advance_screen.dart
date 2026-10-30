@@ -439,7 +439,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                               title: Text(
                                   a['date'] != null
                                       ? dateFmt.format(
-                                          DateTime.parse(a['date']).toLocal())
+                                          parseDay(a['date']))
                                       : '—',
                                   style: const TextStyle(fontSize: 13)),
                               subtitle: Text(
@@ -817,7 +817,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
                 flex: 2,
                 child: Text(
                     item['date'] != null
-                        ? dateFmt.format(DateTime.parse(item['date']).toLocal())
+                        ? dateFmt.format(parseDay(item['date']))
                         : '—',
                     style: const TextStyle(
                         fontSize: 12, color: Color(0xFF6B7280)))),
@@ -910,7 +910,7 @@ class _AdvanceScreenState extends State<AdvanceScreen> {
             const SizedBox(height: 3),
             Text(
                 item['date'] != null
-                    ? dateFmt.format(DateTime.parse(item['date']).toLocal())
+                    ? dateFmt.format(parseDay(item['date']))
                     : '—',
                 style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
           ]),
@@ -1120,7 +1120,7 @@ class _AdvanceFormPanelState extends State<AdvanceFormPanel> {
       _employeeId = e['employee']?['_id'];
       _amountCtrl.text = e['amount'] != null ? e['amount'].toString() : '';
       _remarksCtrl.text = e['remarks'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      if (e['date'] != null) _date = parseDay(e['date']);
       _type = e['type'] == 'returned' ? 'returned' : 'given';
       if (_employeeId != null) _loadBalance();
     }

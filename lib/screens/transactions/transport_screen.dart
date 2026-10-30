@@ -1295,7 +1295,7 @@ class _TransportFormPanelState extends State<TransportFormPanel> {
       _distCtrl.text = '${e['distance'] ?? ''}';
       _costCtrl.text = '${e['cost'] ?? ''}';
       _remarksCtrl.text = e['remarks'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      if (e['date'] != null) _date = parseDay(e['date']);
     }
   }
 
@@ -1694,7 +1694,7 @@ class _MeasurementScreenState extends State<MeasurementScreen> {
                       final item = _items[i];
                       final date = item['date'] != null
                           ? DateFormat('dd MMM yyyy')
-                              .format(DateTime.parse(item['date']).toLocal())
+                              .format(parseDay(item['date']))
                           : '—';
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
@@ -1792,7 +1792,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
       _heiCtrl.text = '${e['height'] ?? ''}';
       _qtyCtrl.text = '${e['quantity'] ?? ''}';
       _descCtrl.text = e['description'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      if (e['date'] != null) _date = parseDay(e['date']);
     }
   }
 

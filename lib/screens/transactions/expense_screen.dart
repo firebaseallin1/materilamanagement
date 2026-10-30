@@ -652,7 +652,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   Widget _buildCard(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
+        ? DateFormat('dd MMM yyyy').format(parseDay(item['date']))
         : '—';
     final color = _cardColor(index);
     final cat = (item['category'] as String? ?? '—');
@@ -798,7 +798,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   Widget _mobileCard(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
+        ? DateFormat('dd MMM yyyy').format(parseDay(item['date']))
         : '—';
     final color = _cardColor(index);
     final cat = (item['category'] as String? ?? '—');
@@ -1055,7 +1055,7 @@ class _ExpenseFormPanelState extends State<ExpenseFormPanel> {
       _category = e['category'];
       _amountCtrl.text = '${e['amount'] ?? ''}';
       _descCtrl.text = e['description'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      if (e['date'] != null) _date = parseDay(e['date']);
     }
   }
 

@@ -544,3 +544,8 @@ class ButtonLoader extends StatelessWidget {
     );
   }
 }
+
+/// Reads the calendar day of a stored date ("2026-10-29T20:15:38Z" → 29 Oct).
+/// The app saves the picked day as-is, so the date part is the real day;
+/// converting with toLocal() would push evening entries to the next day.
+DateTime parseDay(String iso) => DateTime.parse(iso.substring(0, 10));

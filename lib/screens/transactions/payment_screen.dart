@@ -699,7 +699,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   Widget _buildIncomingCard(Map item, int index) {
     final date = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
+        ? DateFormat('dd MMM yyyy').format(parseDay(item['date']))
         : '—';
     final fmt = NumberFormat('#,##0.##');
     final amount = double.tryParse('${item['amount']}') ?? 0;
@@ -1393,7 +1393,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     final catColor = _categoryColor(category);
     final catIcon = _categoryIcon(category);
     final payDate = item['date'] != null
-        ? DateFormat('dd MMM yyyy').format(DateTime.parse(item['date']).toLocal())
+        ? DateFormat('dd MMM yyyy').format(parseDay(item['date']))
         : '—';
     final fmt = NumberFormat('#,##0.##');
     final paid = double.tryParse('${item['amount']}') ?? 0;
@@ -1846,13 +1846,13 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               : '';
       _refCtrl.text = e['referenceNo'] ?? '';
       _descCtrl.text = e['description'] ?? '';
-      if (e['date'] != null) _date = DateTime.parse(e['date']).toLocal();
+      if (e['date'] != null) _date = parseDay(e['date']);
       // Measurement-specific fields
       if (_category == 'measurement') {
         if (e['periodFrom'] != null)
-          _measFrom = DateTime.parse(e['periodFrom'] as String).toLocal();
+          _measFrom = parseDay(e['periodFrom'] as String);
         if (e['periodTo'] != null)
-          _measTo = DateTime.parse(e['periodTo'] as String).toLocal();
+          _measTo = parseDay(e['periodTo'] as String);
         _measPrevOutstanding =
             ((e['previousOutstanding'] ?? 0) as num).toDouble();
         _measStoredThisWeekOutstanding =
@@ -4741,7 +4741,7 @@ class _PaymentFormPanelState extends State<PaymentFormPanel> {
               final selected = _selectedExpenseIds.contains(id);
               final amount = ((item['amount'] ?? 0) as num).toDouble();
               final dateStr = item['date'] != null
-                  ? DateFormat('dd MMM').format(DateTime.parse(item['date']).toLocal())
+                  ? DateFormat('dd MMM').format(parseDay(item['date']))
                   : '';
               return Container(
                 decoration: BoxDecoration(
